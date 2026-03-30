@@ -1,11 +1,11 @@
 """
-NBA Scoring Analysis Dashboard
+NBA Player Analysis Dashboard
 """
 import streamlit as st
 import pandas as pd
 import altair as alt
 
-st.set_page_config(page_title="NBA Scoring Analysis", layout="wide", page_icon="🏀")
+st.set_page_config(page_title="NBA Player Analysis", layout="wide", page_icon="🏀")
 
 # ── 加载数据 ──
 @st.cache_data
@@ -14,11 +14,13 @@ def load_data():
     po = pd.read_csv("data/nba100_playoffs.csv")
     scoring = pd.read_csv("results/scoring_ranking.csv")
     impact = pd.read_csv("results/impact_ranking.csv")
+    playmaking = pd.read_csv("results/playmaking_ranking.csv")
 
     career = reg.groupby("player").agg({
         "PPG": "mean", "FGM": "mean", "FG3M": "mean",
         "FTM": "mean", "TS_pct": "mean", "GP": "sum",
         "APG": "mean", "MIN": "mean",
+        "TOV": "mean",
     }).round(3).reset_index()
     career["FG3M"] = career["FG3M"].fillna(0)
     career["FG2M"] = career["FGM"] - career["FG3M"]
@@ -30,46 +32,57 @@ def load_data():
     career["pct_3P"] = (career["pts_3P"] / career["pts_total"] * 100).round(1)
     career["pct_FT"] = (career["pts_FT"] / career["pts_total"] * 100).round(1)
     career["purity"] = (100 - career["pct_FT"]).round(1)
+    career["TOV"] = career["TOV"].fillna(2.5)
+    career["ast_tov"] = (career["APG"] / career["TOV"].replace(0, 0.5)).round(2)
 
-    po_avg = po.groupby("player").agg({"PPG": "mean", "GP": "sum"}).round(2).reset_index()
-    po_avg.columns = ["player", "po_PPG", "po_GP"]
+    po_avg = po.groupby("player").agg({"PPG": "mean", "APG": "mean", "GP": "sum"}).round(2).reset_index()
+    po_avg.columns = ["player", "po_PPG", "po_APG", "po_GP"]
     career = career.merge(po_avg, on="player", how="left")
     career["po_delta"] = (career["po_PPG"] - career["PPG"]).round(2)
 
     career = career.merge(scoring[["player", "scoring_rank"]], on="player", how="left")
     career = career.merge(impact[["player", "impact_rank"]], on="player", how="left")
+    career = career.merge(playmaking[["player", "play_rank"]], on="player", how="left")
 
-    return career, scoring, impact
+    return career
 
-career, scoring, impact = load_data()
+career = load_data()
 
 # ── 标题 ──
-st.title("🏀 NBA Historical Scoring Analysis")
-st.markdown("**101 players | 1959-2026 | Data-driven ranking system**")
+st.title("🏀 NBA Player Analysis System")
+st.markdown("**101 players | 1959-2026 | Multi-dimensional, era-adjusted rankings**")
 st.markdown("---")
 
-# ── 侧边栏 ──
-st.sidebar.header("Controls")
+# ── 侧边栏: 分类导航 ──
+st.sidebar.header("Navigation")
+category = st.sidebar.radio("Category", ["🏀 Offense", "🔎 Player Lookup"])
+
+if category == "🏀 Offense":
+    view = st.sidebar.radio("View", [
+        "Scoring Ranking",
+        "Impact Ranking",
+        "Playmaking Ranking",
+        "Scoring Breakdown",
+        "Playoff Performance",
+        "Head-to-Head",
+    ])
+else:
+    view = "Player Lookup"
+
 top_n = st.sidebar.slider("Show top N players", 10, 101, 25)
-view = st.sidebar.radio("View", ["Scoring Ranking", "Impact Ranking", "Head-to-Head",
-                                   "Scoring Breakdown", "Playoff Performance", "Player Lookup"])
 
 # ════════════════════════════════
 if view == "Scoring Ranking":
-    st.header("📊 Scoring Ability Ranking")
+    st.header("📊 Scoring Ability")
     st.markdown("""
-    **Who is the best scorer in NBA history?**
+    **Who puts the ball in the basket best?**
 
-    This ranking measures pure scoring ability: how many points you put in the basket, and how efficiently.
-
-    **Method:**
     - **Scoring Index** = PPG (FT discounted 0.7x) x TS+ (relative efficiency)
-    - **Playoff weight**: Each playoff game counts 3x a regular season game (playoffs include Finals)
-    - **Era adjustment**: Pace correction + competition intensity sqrt(teams/30)
-    - **Scoring scarcity**: Players who dominate in low-scoring eras get extra credit (Z-score bonus)
-    - **Two sub-views** (A: per-game scoring, C: per-minute era-adjusted) combined via median rank
+    - **Playoff weight**: Each playoff game = 3x regular season
+    - **Era adjustment**: Pace + competition intensity + scoring scarcity Z-score
+    - **Two sub-views** (per-game + per-minute era-adjusted) combined via median rank
 
-    *Assists, playmaking, and gravity effects are NOT included — those belong in the Impact Ranking.*
+    *Assists and playmaking are NOT included — see Playmaking Ranking for that.*
     """)
 
     df = career.sort_values("scoring_rank").head(top_n).copy()
@@ -91,21 +104,17 @@ if view == "Scoring Ranking":
 
 # ════════════════════════════════
 elif view == "Impact Ranking":
-    st.header("⚡ Offensive Impact Ranking")
+    st.header("⚡ Offensive Impact")
     st.markdown("""
-    **Who contributes the most to team offense?**
+    **Who contributes the most to team offense overall?**
 
-    This ranking measures total offensive impact: scoring + assists + gravity + playmaking.
-    It's fundamentally different from the Scoring Ranking.
+    Includes scoring + assists + gravity + playmaking — the full picture.
 
-    **Method:**
-    - Ridge regression trained on **O-DPM** (Offensive Daily Plus-Minus) as proxy target
-    - Features are **era-adjusted Z-scores**: a player's stats are compared to their contemporaries
-    - This means a player averaging 10 APG in the 1960s (when nobody else did) gets more credit
-      than 10 APG today (when it's more common)
-    - Trained on 53 modern players with O-DPM data, then applied to all 101 players
+    - Ridge regression trained on **O-DPM** (proxy target) with **era-adjusted Z-scores**
+    - A player's stats are compared to their contemporaries, not raw values
+    - 10 APG in the 1960s (rare) gets more credit than 10 APG today (more common)
 
-    *Note: O-DPM is itself a statistical model output, not ground truth. Results are approximate.*
+    *Note: O-DPM is a proxy target, not ground truth.*
     """)
 
     df = career.sort_values("impact_rank").head(top_n).copy()
@@ -126,62 +135,52 @@ elif view == "Impact Ranking":
                  use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
-elif view == "Head-to-Head":
-    st.header("🔄 Scoring vs Impact: Player Types")
+elif view == "Playmaking Ranking":
+    st.header("🎯 Playmaking Ability")
     st.markdown("""
-    **What kind of offensive player are you?**
+    **Who creates the most scoring opportunities for others?**
 
-    By comparing Scoring Rank vs Impact Rank, we can classify players into three types:
-    - **🎯 Pure Scorer** (Scoring >> Impact): Scores a lot but doesn't create for others. *e.g. Kobe, Carmelo, Shaq*
-    - **🎨 Playmaker** (Impact >> Scoring): Elevates the whole offense beyond just scoring. *e.g. Nash, Stockton, Jokic*
-    - **⚖️ Balanced** (Both similar): Elite at scoring AND creating. *e.g. Jordan, Curry, LeBron*
+    Completely independent from Scoring — this measures what you create for teammates.
 
-    Both rankings are era-adjusted. Gap = Impact Rank - Scoring Rank (positive = pure scorer).
+    - **Playmaking Index** = APG (pace-adjusted) x Assist-to-Turnover ratio x Scarcity
+    - **Era-adjusted**: Averaging 10 APG in 1962 (only Oscar did it) counts more than 10 APG in 2025
+    - **Playoff 3x weight**: Playmaking under pressure matters more
+    - **AST/TOV**: Creating without wasting — John Stockton (3.7) vs Westbrook (2.0)
+
+    *Scoring ability is NOT included — see Scoring Ranking for that.*
     """)
 
-    both = career[(career["scoring_rank"].notna()) & (career["impact_rank"].notna())].copy()
-    both = both[both["scoring_rank"] <= top_n]
+    df = career.sort_values("play_rank").head(top_n).copy()
+    df["Rank"] = df["play_rank"].astype(int)
 
-    col1, col2 = st.columns(2)
+    chart_df = df[["play_rank", "player", "APG", "ast_tov"]].copy()
+    chart_df["Rank"] = chart_df["play_rank"].astype(int)
+    chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
+    chart = alt.Chart(chart_df).mark_bar(color="#4caf50").encode(
+        x=alt.X("APG:Q", title="Career APG"),
+        y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
+        tooltip=["player", "Rank", "APG", "ast_tov"]
+    ).properties(height=max(top_n * 28, 400))
+    st.altair_chart(chart, use_container_width=True)
 
-    with col1:
-        st.subheader("Scatter: Score Rank vs Impact Rank")
-        scatter_data = both[["player", "scoring_rank", "impact_rank"]].copy()
-        scatter_data["diff"] = scatter_data["impact_rank"] - scatter_data["scoring_rank"]
-        scatter_data["type"] = scatter_data["diff"].apply(
-            lambda d: "Pure Scorer" if d > 10 else ("Playmaker" if d < -10 else "Balanced"))
-        st.scatter_chart(scatter_data, x="scoring_rank", y="impact_rank", color="type", size=60)
-
-    with col2:
-        st.subheader("Player Type Classification")
-        compare = both[["player", "scoring_rank", "impact_rank"]].copy()
-        compare["diff"] = compare["impact_rank"] - compare["scoring_rank"]
-        compare["Type"] = compare["diff"].apply(
-            lambda d: "🎯 Pure Scorer" if d > 10 else ("🎨 Playmaker" if d < -10 else "⚖️ Balanced"))
-        compare = compare.sort_values("scoring_rank")
-        st.dataframe(compare.rename(columns={"player": "Player", "scoring_rank": "Score Rk",
-                                               "impact_rank": "Impact Rk", "diff": "Gap"}).reset_index(drop=True),
-                     use_container_width=True, height=min(top_n * 38, 600))
+    show_cols = ["Rank", "player", "APG", "ast_tov", "GP"]
+    st.dataframe(df[show_cols].rename(columns={
+        "player": "Player", "ast_tov": "AST/TOV"
+    }).reset_index(drop=True),
+        use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
 elif view == "Scoring Breakdown":
-    st.header("🔍 Scoring Structure Breakdown")
+    st.header("🔍 Scoring Structure")
     st.markdown("""
     **Where do the points come from?**
 
-    Every point is scored in one of three ways:
-    - 🔵 **2-Point field goals** (mid-range, drives, post-ups)
-    - 🟠 **3-Point field goals** (perimeter shooting)
-    - ⬜ **Free throws** (foul shots)
-
-    **Scoring Purity** = % of points from actual field goals (2P + 3P).
-    High purity = scores from real shooting skill. Low purity = relies on getting to the foul line.
-
-    *Players with high FT% are penalized in the Scoring Ranking (FT x 0.7 discount).*
+    - 🔵 **2-Point** (mid-range, drives, post-ups) | 🟠 **3-Point** (perimeter) | ⬜ **Free throws**
+    - **Purity** = % from field goals. High purity = real shooting skill, not foul-drawing.
+    - Players with high FT% are penalized in Scoring Ranking (FT x 0.7).
     """)
 
     df = career.sort_values("scoring_rank").head(top_n).copy()
-
     chart_df = df[["player", "pct_2P", "pct_3P", "pct_FT"]].set_index("player")
     chart_df.columns = ["2-Point %", "3-Point %", "Free Throw %"]
     st.bar_chart(chart_df, stack=True, color=["#2196F3", "#FF9800", "#9E9E9E"])
@@ -194,7 +193,6 @@ elif view == "Scoring Breakdown":
             columns={"player": "Player", "purity": "Purity%", "pct_2P": "2P%",
                      "pct_3P": "3P%", "pct_FT": "FT%"}).reset_index(drop=True),
             use_container_width=True)
-
     with col2:
         st.subheader("⚠️ Most FT-Dependent")
         impure = career.sort_values("purity").head(10)
@@ -205,31 +203,25 @@ elif view == "Scoring Breakdown":
 
 # ════════════════════════════════
 elif view == "Playoff Performance":
-    st.header("🔥 Playoff Performance: Who Steps Up?")
+    st.header("🔥 Playoff Performance")
     st.markdown("""
     **The biggest stage separates the great from the good.**
 
-    This compares each player's playoff PPG vs regular season PPG (minimum 30 playoff games).
-
-    - **📈 Risers**: Score MORE in the playoffs — the true big-game players
-    - **📉 Droppers**: Score LESS in the playoffs — may struggle under pressure or tighter defense
-
-    *Playoff games are weighted 3x in the Scoring Ranking, so playoff risers get a significant boost.*
+    Playoff PPG vs regular season PPG (minimum 30 playoff games).
+    Playoff games are weighted 3x in all rankings.
     """)
 
     df = career[career["po_GP"] > 30].copy()
     df = df.sort_values("po_delta", ascending=False)
 
     col1, col2 = st.columns(2)
-
     with col1:
-        st.subheader("📈 Biggest Playoff Risers")
+        st.subheader("📈 Biggest Risers")
         risers = df.head(15)[["player", "PPG", "po_PPG", "po_delta", "po_GP"]].copy()
         risers.columns = ["Player", "Reg PPG", "PO PPG", "Change", "PO Games"]
         st.dataframe(risers.reset_index(drop=True), use_container_width=True)
-
     with col2:
-        st.subheader("📉 Biggest Playoff Drops")
+        st.subheader("📉 Biggest Drops")
         drops = df.tail(15).sort_values("po_delta")[["player", "PPG", "po_PPG", "po_delta", "po_GP"]].copy()
         drops.columns = ["Player", "Reg PPG", "PO PPG", "Change", "PO Games"]
         st.dataframe(drops.reset_index(drop=True), use_container_width=True)
@@ -238,41 +230,68 @@ elif view == "Playoff Performance":
     st.bar_chart(chart_df, color="#ffd700")
 
 # ════════════════════════════════
-elif view == "Player Lookup":
-    st.header("🔎 Player Lookup")
+elif view == "Head-to-Head":
+    st.header("🔄 Cross-Ranking Comparison")
     st.markdown("""
-    **Deep dive into any player's scoring profile.**
+    **Compare all three offensive dimensions side by side.**
 
-    Select a player to see their scoring rank, impact rank, efficiency, scoring breakdown,
-    playoff performance, and a detailed explanation of why they ranked where they did.
+    - **All-around offensive star**: High in all three
+    - **Pure Scorer**: Scoring high, Playmaking low
+    - **Pure Playmaker**: Playmaking high, Scoring low
+    - **Score + Create**: Top 15 in both Scoring and Playmaking
     """)
 
-    player = st.selectbox("Select player", sorted(career["player"].unique()))
+    df = career.copy()
+    df = df[df["scoring_rank"].notna() & df["play_rank"].notna()]
 
+    compare = df[["player", "scoring_rank", "impact_rank", "play_rank", "PPG", "APG"]].copy()
+    compare["scoring_rank"] = compare["scoring_rank"].astype(int)
+    compare["impact_rank"] = compare["impact_rank"].astype(int)
+    compare["play_rank"] = compare["play_rank"].astype(int)
+    compare = compare.sort_values("scoring_rank").head(top_n)
+
+    st.dataframe(compare.rename(columns={
+        "player": "Player", "scoring_rank": "Scoring",
+        "impact_rank": "Impact", "play_rank": "Playmaking"
+    }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+
+# ════════════════════════════════
+elif view == "Player Lookup":
+    st.header("🔎 Player Lookup")
+    st.markdown("**Complete offensive profile for any player.**")
+
+    player = st.selectbox("Select player", sorted(career["player"].unique()))
     r = career[career["player"] == player].iloc[0]
 
+    # 排名卡片
     col1, col2, col3 = st.columns(3)
     with col1:
+        st.subheader("📊 Scoring")
         scoring_rk = int(r["scoring_rank"]) if pd.notna(r["scoring_rank"]) else "N/A"
-        st.metric("Scoring Rank", f"#{scoring_rk}")
-        st.metric("Career PPG", f"{r['PPG']:.1f}")
-        st.metric("Games Played", f"{int(r['GP'])}")
+        st.metric("Rank", f"#{scoring_rk}")
+        st.metric("PPG", f"{r['PPG']:.1f}")
+        st.metric("TS%", f"{r['TS_pct']:.3f}")
+        st.metric("Purity", f"{r['purity']:.1f}%")
 
     with col2:
+        st.subheader("⚡ Impact")
         impact_rk = int(r["impact_rank"]) if pd.notna(r["impact_rank"]) else "N/A"
-        st.metric("Impact Rank", f"#{impact_rk}")
-        st.metric("TS%", f"{r['TS_pct']:.3f}")
-        st.metric("APG", f"{r['APG']:.1f}")
-
-    with col3:
-        st.metric("Scoring Purity", f"{r['purity']:.1f}%")
+        st.metric("Rank", f"#{impact_rk}")
+        st.metric("GP", f"{int(r['GP'])}")
         if pd.notna(r.get("po_PPG")):
             delta = r["po_PPG"] - r["PPG"]
             st.metric("Playoff PPG", f"{r['po_PPG']:.1f}", delta=f"{delta:+.1f}")
-            st.metric("Playoff Games", f"{int(r['po_GP'])}")
         else:
             st.metric("Playoff PPG", "N/A")
 
+    with col3:
+        st.subheader("🎯 Playmaking")
+        play_rk = int(r["play_rank"]) if pd.notna(r["play_rank"]) else "N/A"
+        st.metric("Rank", f"#{play_rk}")
+        st.metric("APG", f"{r['APG']:.1f}")
+        st.metric("AST/TOV", f"{r['ast_tov']:.1f}")
+
+    # 得分结构
     st.subheader("Scoring Breakdown")
     breakdown = pd.DataFrame({
         "Source": ["2-Point", "3-Point", "Free Throw"],
@@ -280,7 +299,8 @@ elif view == "Player Lookup":
     }).set_index("Source")
     st.bar_chart(breakdown, color="#00bcd4")
 
-    st.subheader("Why this rank?")
+    # 解释
+    st.subheader("Analysis")
     factors = []
     if r["PPG"] > 25: factors.append(f"✅ High volume scorer (PPG={r['PPG']:.1f})")
     elif r["PPG"] > 20: factors.append(f"✅ Solid scorer (PPG={r['PPG']:.1f})")
@@ -290,14 +310,21 @@ elif view == "Player Lookup":
     elif r["TS_pct"] > 0.54: factors.append(f"✅ Good efficiency (TS%={r['TS_pct']:.3f})")
     else: factors.append(f"⚠️ Below-average efficiency (TS%={r['TS_pct']:.3f})")
 
-    if r["pct_FT"] > 28: factors.append(f"⚠️ Heavy FT reliance ({r['pct_FT']:.1f}% from FT, penalized in ranking)")
-    elif r["pct_FT"] < 18: factors.append(f"✅ Low FT reliance ({r['pct_FT']:.1f}%, scores from real shots)")
+    if r["pct_FT"] > 28: factors.append(f"⚠️ Heavy FT reliance ({r['pct_FT']:.1f}%)")
+    elif r["pct_FT"] < 18: factors.append(f"✅ Low FT reliance ({r['pct_FT']:.1f}%)")
+
+    if r["APG"] > 7: factors.append(f"✅ Elite playmaker (APG={r['APG']:.1f})")
+    elif r["APG"] > 4: factors.append(f"✅ Good playmaker (APG={r['APG']:.1f})")
+    else: factors.append(f"⚠️ Limited playmaking (APG={r['APG']:.1f})")
+
+    if r["ast_tov"] > 2.5: factors.append(f"✅ Excellent decision-making (AST/TOV={r['ast_tov']:.1f})")
+    elif r["ast_tov"] < 1.5: factors.append(f"⚠️ Turnover-prone (AST/TOV={r['ast_tov']:.1f})")
 
     if pd.notna(r.get("po_PPG")) and r["po_GP"] > 50:
         if r["po_PPG"] > r["PPG"]:
-            factors.append(f"✅ Playoff riser ({r['po_PPG']:.1f} > {r['PPG']:.1f} in {int(r['po_GP'])} games, boosted by 3x weight)")
+            factors.append(f"✅ Playoff riser ({r['po_PPG']:.1f} > {r['PPG']:.1f}, {int(r['po_GP'])} games)")
         else:
-            factors.append(f"⚠️ Playoff decline ({r['po_PPG']:.1f} < {r['PPG']:.1f} in {int(r['po_GP'])} games)")
+            factors.append(f"⚠️ Playoff decline ({r['po_PPG']:.1f} < {r['PPG']:.1f}, {int(r['po_GP'])} games)")
     elif pd.notna(r.get("po_GP")) and r["po_GP"] < 50:
         factors.append(f"⚠️ Limited playoff experience ({int(r['po_GP'])} games)")
 
@@ -307,7 +334,5 @@ elif view == "Player Lookup":
 # ── Footer ──
 st.markdown("---")
 st.markdown("""
-*Data sources: NBA API (1959-2026) + databallr.com (2001-2026) | 101 players (NBA 75 + modern stars)*
-
-*All rankings are era-adjusted using scoring scarcity Z-scores, pace correction, and competition intensity.*
+*Data: NBA API (1959-2026) + databallr.com (2001-2026) | 101 players | All era-adjusted*
 """)
