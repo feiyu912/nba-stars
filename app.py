@@ -60,23 +60,28 @@ st.markdown("**101 players | 1959-2026 | Multi-dimensional, era-adjusted ranking
 st.markdown("---")
 
 # ── 侧边栏: 分类导航 ──
-st.sidebar.markdown("## 🏀 Offense")
-off_views = [
-    "Scoring Ranking",
-    "Impact Ranking",
-    "Playmaking Ranking",
-    "Scoring Breakdown",
-    "Playoff Performance",
-    "Head-to-Head",
-]
-st.sidebar.markdown("## 🛡️ Defense")
-def_views = ["Defense Ranking"]
-st.sidebar.markdown("## 🏀 Rebounding")
-reb_views = ["Rebounding Ranking"]
-# st.sidebar.markdown("## 📊 Composite")  # 待开发
-st.sidebar.markdown("## 🔎 Tools")
-all_views = off_views + def_views + reb_views + ["Player Lookup"]
-view = st.sidebar.radio("Select view", all_views, label_visibility="collapsed")
+category = st.sidebar.selectbox("Category", [
+    "🏀 Offense",
+    "🛡️ Defense",
+    "📊 Rebounding",
+    "🔎 Player Lookup",
+])
+
+if category == "🏀 Offense":
+    view = st.sidebar.radio("View", [
+        "Scoring Ranking",
+        "Impact Ranking",
+        "Playmaking Ranking",
+        "Scoring Breakdown",
+        "Playoff Performance",
+        "Head-to-Head",
+    ])
+elif category == "🛡️ Defense":
+    view = "Defense Ranking"
+elif category == "📊 Rebounding":
+    view = "Rebounding Ranking"
+else:
+    view = "Player Lookup"
 
 st.sidebar.markdown("---")
 top_n = st.sidebar.slider("Show top N players", 10, 101, 25)
