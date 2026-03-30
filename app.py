@@ -88,7 +88,9 @@ if view == "Scoring Ranking":
 elif view == "Impact Ranking":
     st.header("⚡ Offensive Impact Ranking")
     st.markdown("""
-    **Method:** Ridge regression trained on O-DPM (proxy target) | Includes assists, gravity, playmaking
+    **Method:** Ridge regression on era-adjusted Z-scores → predict O-DPM (proxy target)
+
+    Features are era-adjusted: a player's stats are compared to their contemporaries, not raw values.
     """)
 
     df = career.sort_values("impact_rank").head(top_n).copy()
@@ -99,7 +101,7 @@ elif view == "Impact Ranking":
     chart_df["Rank"] = chart_df["impact_rank"].astype(int)
     chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
     chart = alt.Chart(chart_df).mark_bar(color="#ff9800").encode(
-        x=alt.X("APG:Q", title="Career APG"),
+        x=alt.X("PPG:Q", title="Career PPG"),
         y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"),
                 title=""),
         tooltip=["player", "Rank", "PPG", "APG"]
@@ -113,7 +115,7 @@ elif view == "Impact Ranking":
 # ════════════════════════════════
 elif view == "Head-to-Head":
     st.header("🔄 Scoring vs Impact: Player Types")
-    st.markdown("Players above the line = pure scorers | Below = playmakers")
+    st.markdown("Both rankings are era-adjusted. Players above the line = pure scorers | Below = playmakers")
 
     both = career[(career["scoring_rank"].notna()) & (career["impact_rank"].notna())].copy()
     both = both[both["scoring_rank"] <= top_n]
