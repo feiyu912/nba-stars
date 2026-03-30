@@ -16,6 +16,7 @@ def load_data():
     impact = pd.read_csv("results/impact_ranking.csv")
     playmaking = pd.read_csv("results/playmaking_ranking.csv")
     defense = pd.read_csv("results/defense_ranking.csv")
+    rebounding = pd.read_csv("results/rebounding_ranking.csv")
 
     career = reg.groupby("player").agg({
         "PPG": "mean", "FGM": "mean", "FG3M": "mean",
@@ -45,6 +46,9 @@ def load_data():
     career = career.merge(impact[["player", "impact_rank"]], on="player", how="left")
     career = career.merge(playmaking[["player", "play_rank"]], on="player", how="left")
     career = career.merge(defense[["player", "def_rank"]], on="player", how="left")
+    career = career.merge(rebounding[["player", "reb_rank", "RPG", "OREB", "DREB"]].rename(
+        columns={"RPG": "reb_RPG", "OREB": "reb_OREB", "DREB": "reb_DREB"}
+    ), on="player", how="left")
 
     return career
 
@@ -67,9 +71,11 @@ off_views = [
 ]
 st.sidebar.markdown("## 🛡️ Defense")
 def_views = ["Defense Ranking"]
+st.sidebar.markdown("## 🏀 Rebounding")
+reb_views = ["Rebounding Ranking"]
 # st.sidebar.markdown("## 📊 Composite")  # 待开发
 st.sidebar.markdown("## 🔎 Tools")
-all_views = off_views + def_views + ["Player Lookup"]
+all_views = off_views + def_views + reb_views + ["Player Lookup"]
 view = st.sidebar.radio("Select view", all_views, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
@@ -248,17 +254,17 @@ elif view == "Head-to-Head":
     df = career.copy()
     df = df[df["scoring_rank"].notna() & df["play_rank"].notna()]
 
-    compare = df[["player", "scoring_rank", "impact_rank", "play_rank", "def_rank", "PPG", "APG"]].copy()
-    compare["scoring_rank"] = compare["scoring_rank"].astype(int)
-    compare["impact_rank"] = compare["impact_rank"].astype(int)
-    compare["play_rank"] = compare["play_rank"].astype(int)
-    compare["def_rank"] = compare["def_rank"].fillna(0).astype(int)
+    compare = df[["player", "scoring_rank", "impact_rank", "play_rank", "def_rank", "reb_rank", "PPG", "APG"]].copy()
+    for c in ["scoring_rank", "impact_rank", "play_rank"]:
+        compare[c] = compare[c].astype(int)
+    for c in ["def_rank", "reb_rank"]:
+        compare[c] = compare[c].fillna(0).astype(int)
     compare = compare.sort_values("scoring_rank").head(top_n)
 
     st.dataframe(compare.rename(columns={
         "player": "Player", "scoring_rank": "Scoring",
         "impact_rank": "Impact", "play_rank": "Playmaking",
-        "def_rank": "Defense"
+        "def_rank": "Defense", "reb_rank": "Rebound"
     }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
@@ -293,6 +299,39 @@ elif view == "Defense Ranking":
     st.dataframe(df[show_cols].rename(columns={
         "player": "Player", "reg_SPG": "SPG", "reg_BPG": "BPG",
         "reg_def": "STL+BLK", "po_GP": "Playoff GP"
+    }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+
+# ════════════════════════════════
+elif view == "Rebounding Ranking":
+    st.header("🏀 Rebounding Ability")
+    st.markdown("""
+    **Who controls the boards?**
+
+    - **Total RPG** (pace-adjusted) with era scarcity bonus
+    - **ORB** = Offensive rebounds (creating second chances)
+    - **DRB** = Defensive rebounds (ending opponent possessions)
+    - Playoff experience bonus applied
+
+    *Note: OREB/DREB split unavailable pre-1973; estimated as 30/70 for those players.*
+    """)
+
+    reb_data = pd.read_csv("results/rebounding_ranking.csv")
+    df = reb_data.sort_values("reb_rank").head(top_n).copy()
+    df["Rank"] = df["reb_rank"].astype(int)
+
+    chart_df = df[["reb_rank", "player", "RPG", "OREB", "DREB"]].copy()
+    chart_df["Rank"] = chart_df["reb_rank"].astype(int)
+    chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
+    chart = alt.Chart(chart_df).mark_bar(color="#9c27b0").encode(
+        x=alt.X("RPG:Q", title="Career RPG"),
+        y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
+        tooltip=["player", "Rank", "RPG", "OREB", "DREB"]
+    ).properties(height=max(top_n * 28, 400))
+    st.altair_chart(chart, use_container_width=True)
+
+    show_cols = ["Rank", "player", "RPG", "OREB", "DREB", "po_GP"]
+    st.dataframe(df[show_cols].rename(columns={
+        "player": "Player", "po_GP": "Playoff GP"
     }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
@@ -332,9 +371,14 @@ elif view == "Player Lookup":
         st.metric("AST/TOV", f"{r['ast_tov']:.1f}")
 
     with col4:
-        st.subheader("🛡️ Defense")
+        st.subheader("🛡️ Def / 🏀 Reb")
         def_rk = int(r["def_rank"]) if pd.notna(r.get("def_rank")) else "N/A"
-        st.metric("Rank", f"#{def_rk}")
+        st.metric("Defense Rank", f"#{def_rk}")
+        reb_rk = int(r["reb_rank"]) if pd.notna(r.get("reb_rank")) else "N/A"
+        st.metric("Rebound Rank", f"#{reb_rk}")
+        if pd.notna(r.get("reb_RPG")):
+            st.metric("RPG", f"{r['reb_RPG']:.1f}")
+            st.metric("ORB / DRB", f"{r['reb_OREB']:.1f} / {r['reb_DREB']:.1f}")
 
     # 得分结构
     st.subheader("Scoring Breakdown")
