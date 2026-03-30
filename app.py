@@ -15,6 +15,7 @@ def load_data():
     scoring = pd.read_csv("results/scoring_ranking.csv")
     impact = pd.read_csv("results/impact_ranking.csv")
     playmaking = pd.read_csv("results/playmaking_ranking.csv")
+    defense = pd.read_csv("results/defense_ranking.csv")
 
     career = reg.groupby("player").agg({
         "PPG": "mean", "FGM": "mean", "FG3M": "mean",
@@ -43,6 +44,7 @@ def load_data():
     career = career.merge(scoring[["player", "scoring_rank"]], on="player", how="left")
     career = career.merge(impact[["player", "impact_rank"]], on="player", how="left")
     career = career.merge(playmaking[["player", "play_rank"]], on="player", how="left")
+    career = career.merge(defense[["player", "def_rank"]], on="player", how="left")
 
     return career
 
@@ -63,10 +65,11 @@ off_views = [
     "Playoff Performance",
     "Head-to-Head",
 ]
-# st.sidebar.markdown("## 🛡️ Defense")  # 待开发
+st.sidebar.markdown("## 🛡️ Defense")
+def_views = ["Defense Ranking"]
 # st.sidebar.markdown("## 📊 Composite")  # 待开发
 st.sidebar.markdown("## 🔎 Tools")
-all_views = off_views + ["Player Lookup"]
+all_views = off_views + def_views + ["Player Lookup"]
 view = st.sidebar.radio("Select view", all_views, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
@@ -245,27 +248,63 @@ elif view == "Head-to-Head":
     df = career.copy()
     df = df[df["scoring_rank"].notna() & df["play_rank"].notna()]
 
-    compare = df[["player", "scoring_rank", "impact_rank", "play_rank", "PPG", "APG"]].copy()
+    compare = df[["player", "scoring_rank", "impact_rank", "play_rank", "def_rank", "PPG", "APG"]].copy()
     compare["scoring_rank"] = compare["scoring_rank"].astype(int)
     compare["impact_rank"] = compare["impact_rank"].astype(int)
     compare["play_rank"] = compare["play_rank"].astype(int)
+    compare["def_rank"] = compare["def_rank"].fillna(0).astype(int)
     compare = compare.sort_values("scoring_rank").head(top_n)
 
     st.dataframe(compare.rename(columns={
         "player": "Player", "scoring_rank": "Scoring",
-        "impact_rank": "Impact", "play_rank": "Playmaking"
+        "impact_rank": "Impact", "play_rank": "Playmaking",
+        "def_rank": "Defense"
+    }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+
+# ════════════════════════════════
+elif view == "Defense Ranking":
+    st.header("🛡️ Defensive Ability")
+    st.markdown("""
+    **Who is the best defender in NBA history?**
+
+    - **Defense Output** = STL + BLK (steals + blocks), pace-adjusted
+    - **Era scarcity**: Dominating defensively in a low-steal/block era gets extra credit
+    - **Playoff experience bonus**: More playoff games = defense trusted under pressure
+    - Two sub-views (per-game + per-minute era-adjusted) combined via median rank
+
+    *Note: STL/BLK data only available from 1973. 11 pre-1973 players use median estimates.*
+    """)
+
+    defense_data = pd.read_csv("results/defense_ranking.csv")
+    df = defense_data.sort_values("def_rank").head(top_n).copy()
+    df["Rank"] = df["def_rank"].astype(int)
+
+    chart_df = df[["def_rank", "player", "reg_SPG", "reg_BPG", "reg_def"]].copy()
+    chart_df["Rank"] = chart_df["def_rank"].astype(int)
+    chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
+    chart = alt.Chart(chart_df).mark_bar(color="#e53935").encode(
+        x=alt.X("reg_def:Q", title="Career STL+BLK"),
+        y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
+        tooltip=["player", "Rank", "reg_SPG", "reg_BPG", "reg_def"]
+    ).properties(height=max(top_n * 28, 400))
+    st.altair_chart(chart, use_container_width=True)
+
+    show_cols = ["Rank", "player", "reg_SPG", "reg_BPG", "reg_def", "po_GP"]
+    st.dataframe(df[show_cols].rename(columns={
+        "player": "Player", "reg_SPG": "SPG", "reg_BPG": "BPG",
+        "reg_def": "STL+BLK", "po_GP": "Playoff GP"
     }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
 elif view == "Player Lookup":
     st.header("🔎 Player Lookup")
-    st.markdown("**Complete offensive profile for any player.**")
+    st.markdown("**Complete player profile across all dimensions.**")
 
     player = st.selectbox("Select player", sorted(career["player"].unique()))
     r = career[career["player"] == player].iloc[0]
 
     # 排名卡片
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.subheader("📊 Scoring")
         scoring_rk = int(r["scoring_rank"]) if pd.notna(r["scoring_rank"]) else "N/A"
@@ -291,6 +330,11 @@ elif view == "Player Lookup":
         st.metric("Rank", f"#{play_rk}")
         st.metric("APG", f"{r['APG']:.1f}")
         st.metric("AST/TOV", f"{r['ast_tov']:.1f}")
+
+    with col4:
+        st.subheader("🛡️ Defense")
+        def_rk = int(r["def_rank"]) if pd.notna(r.get("def_rank")) else "N/A"
+        st.metric("Rank", f"#{def_rk}")
 
     # 得分结构
     st.subheader("Scoring Breakdown")
