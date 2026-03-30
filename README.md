@@ -50,16 +50,16 @@ python notebooks/06_scoring_breakdown.py
 
 | 得分排名 | | 进攻影响力排名 | |
 |----------|--|---------------|--|
-| 1. Kevin Durant | | 1. Oscar Robertson | |
-| 2. Michael Jordan | | 2. Nikola Jokic | |
-| 3. Stephen Curry | | 3. Stephen Curry | |
-| 4. Luka Doncic | | 4. Wilt Chamberlain | |
-| 5. LeBron James | | 5. James Harden | |
-| 6. Giannis | | 6. Luka Doncic | |
-| 7. Joel Embiid | | 7. SGA | |
-| 8. Nikola Jokic | | 8. Damian Lillard | |
-| 9. Shaquille O'Neal | | 9. LeBron James | |
-| 10. George Gervin | | 10. Michael Jordan | |
+| 1. Michael Jordan | | 1. James Harden | |
+| 2. Kevin Durant | | 2. Magic Johnson | |
+| 3. LeBron James | | 3. Nikola Jokic | |
+| 4. Luka Doncic | | 4. Luka Doncic | |
+| 5. Stephen Curry | | 5. Oscar Robertson | |
+| 6. Giannis | | 6. LeBron James | |
+| 7. George Gervin | | 7. Stephen Curry | |
+| 7. Joel Embiid | | 8. Wilt Chamberlain | |
+| 9. Kobe Bryant | | 9. Damian Lillard | |
+| 10. James Harden | | 10. John Stockton | |
 
 ### 球员类型 (两表对比)
 
@@ -72,8 +72,9 @@ python notebooks/06_scoring_breakdown.py
 1. **季后赛表现区分真正的得分手** — 乔丹季后赛PPG 34.1 > 常规赛 29.5
 2. **罚球占比影响排名** — 恩比德/哈登30%分靠罚球, 库里只有16%
 3. **时代修正必不可少** — 张伯伦PPG 30.6但打45分钟+8支队
-4. **得分能力和进攻影响力是两回事** — 纯得分手 vs 组织型差异大
-5. **敏感性分析证明结果稳健** — FT系数0.6-0.8变化, TOP10最大波动2位
+4. **得分稀缺性修正** — 90s-00s低得分时代得30分比现代得30分更难, Z-score加成
+5. **得分能力和进攻影响力是两回事** — 纯得分手 vs 组织型差异大
+6. **敏感性分析证明结果稳健** — FT系数0.6-0.8变化, TOP10最大波动2位
 
 ### 得分结构分析
 
@@ -130,6 +131,19 @@ nba-stars/
 ├── README.md
 └── archive/                        # 探索过程备份
 ```
+
+## 修正机制
+
+| 修正 | 方法 | 效果 |
+|------|------|------|
+| **罚球惩罚** | 罚球得分 x 0.7 | 库里(16%靠罚球)上升, 恩比德(30%)下降 |
+| **Pace修正** | PPG x (97/当年pace) | 1960s pace=125 大幅折扣, 现代几乎不变 |
+| **竞争强度** | sqrt(球队数/30) | 8队时代0.52折, 30队时代无折扣 |
+| **得分稀缺性** | 1 + Z-score x 0.1 | 低得分时代(90s-00s)得高分额外加成 |
+
+得分稀缺性示例:
+- 乔丹1997: PPG=29.6, 同年顶级球员平均16.8 → Z-score极高 → 大幅加成
+- 东契奇2025: PPG=30.1, 同年顶级球员平均22.4 → Z-score一般 → 小幅加成
 
 ## 质量验证
 
