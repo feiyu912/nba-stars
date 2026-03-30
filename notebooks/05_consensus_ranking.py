@@ -156,7 +156,31 @@ db_c = db.groupby("player_name").agg({"o_dpm": "mean"}).round(3).reset_index()
 db_c.columns = ["player", "o_dpm"]
 career = career.merge(db_c, on="player", how="left")
 
-features = ["reg_PPG", "reg_TS", "reg_APG", "peak_PPG"]
+# 影响力特征也做时代修正: 用每年Z-score而不是原始值
+# 这样"1990年代场均10次助攻"和"2020年代场均10次助攻"会被区分
+for col in ["PPG", "APG", "TS_pct"]:
+    z_col = f"{col}_era_z"
+    reg[z_col] = 0.0
+    for year in reg["year"].unique():
+        mask = reg["year"] == year
+        year_data = reg.loc[mask, col]
+        if year_data.std() > 0:
+            reg.loc[mask, z_col] = (year_data - year_data.mean()) / year_data.std()
+
+era_z_career = reg.groupby("player").agg({
+    "PPG_era_z": "mean",
+    "APG_era_z": "mean",
+    "TS_pct_era_z": "mean",
+}).round(4).reset_index()
+
+peak_ppg_z = reg.groupby("player")["PPG_era_z"].apply(
+    lambda x: x.nlargest(5).mean()).round(4).reset_index()
+peak_ppg_z.columns = ["player", "peak_PPG_z"]
+
+career = career.merge(era_z_career, on="player", how="left")
+career = career.merge(peak_ppg_z, on="player", how="left")
+
+features = ["PPG_era_z", "TS_pct_era_z", "APG_era_z", "peak_PPG_z"]
 train_mask = career["o_dpm"].notna()
 for f in features:
     career[f] = career[f].fillna(career[f].median())
