@@ -53,10 +53,21 @@ def process_data(df):
     df["competition"] = (df["teams"] / 30).pow(0.5)
     df["PPG_adj"] = df["PPG_adj_ft"] * (97 / df["pace"])
     df["TS_plus"] = df["TS_pct"] / df["lts"]
-    # A: 每场高效得分
-    df["scoreA"] = df["PPG_adj"] * df["TS_plus"]
-    # C: 时代修正每分钟
-    df["scoreC"] = df["PPM_adj_ft"] * df["TS_plus"] * df["competition"]
+
+    # 得分稀缺性: 你的PPG相对于同年所有球员有多突出
+    # 在低得分年代(90s-00s)得高分 → 更大的Z-score → 更高的奖励
+    year_stats = df.groupby("year")["PPG"].agg(["mean", "std"]).reset_index()
+    year_stats.columns = ["year", "year_ppg_mean", "year_ppg_std"]
+    df = df.merge(year_stats, on="year", how="left")
+    df["year_ppg_std"] = df["year_ppg_std"].replace(0, 1)
+    df["ppg_zscore"] = (df["PPG"] - df["year_ppg_mean"]) / df["year_ppg_std"]
+    # 将Z-score转化为乘数: Z=0→1.0, Z=1→1.1, Z=2→1.2 (温和加成)
+    df["scarcity"] = 1 + df["ppg_zscore"] * 0.1
+
+    # A: 每场高效得分 × 稀缺性
+    df["scoreA"] = df["PPG_adj"] * df["TS_plus"] * df["scarcity"]
+    # C: 时代修正每分钟 × 稀缺性
+    df["scoreC"] = df["PPM_adj_ft"] * df["TS_plus"] * df["competition"] * df["scarcity"]
     return df
 
 def summarize(df, prefix):
