@@ -81,18 +81,37 @@ from pathlib import Path  # noqa: E402
 
 APP = Path(__file__).resolve().parent.parent / "app.py"
 
-# 会渲染到界面上的 Streamlit 函数 —— 第一个参数必须是 t(...) 的结果
-RENDER_FUNCS = {
+# 第一参数就是文案的函数
+TEXT_FIRST_FUNCS = {
     "title", "header", "subheader", "markdown", "caption", "info", "warning", "error",
-    "success", "metric", "dataframe", "data_table", "selectbox", "radio", "slider",
-    "checkbox", "button", "text_input", "bar_chart", "line_chart", "area_chart",
-    "altair_chart", "expander", "tabs", "table",
+    "success", "metric", "selectbox", "radio", "slider", "checkbox", "button",
+    "text_input", "expander", "tabs", "table",
 }
-# 语言切换控件本身必须同时显示两种语言, 这是唯一豁免的字面量
+# 这些关键字参数是给人看的, 出现在任何 st.* 调用里都要查 (例如 st.image(caption=...))
+TEXT_KEYWORDS = {"caption", "help", "label", "placeholder"}
 ALLOWED_LITERALS = {"**Language / 语言**"}
+WORDLIKE = re.compile(r"[A-Za-z]{3,}|[\u4e00-\u9fff]")
+
+
+def _has_words(node: ast.AST) -> bool:
+    """判断一个表达式节点里有没有"像文案的东西": 字面量、f-string 的固定部分、字符串拼接"""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return bool(WORDLIKE.search(node.value))
+    if isinstance(node, ast.JoinedStr):                       # f"Hardcoded {x}"
+        return any(_has_words(v) for v in node.values)
+    if isinstance(node, ast.FormattedValue):
+        return False                                          # f"{x}" 里的变量不算文案
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _has_words(node.left) or _has_words(node.right)
+    return False
 
 
 def _literal_ui_strings(source: str) -> list[str]:
+    """扫出所有没走 i18n 的界面文案。
+
+    只查第一个字面量会被绕过 (子智能体验证过): f-string、字符串拼接、
+    caption= 之类的关键字参数都漏。这里把三类都覆盖。
+    """
     offenders: list[str] = []
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
@@ -103,21 +122,44 @@ def _literal_ui_strings(source: str) -> list[str]:
             root = root.value
         if not (isinstance(root, ast.Name) and root.id == "st"):
             continue
-        if node.func.attr not in RENDER_FUNCS or not node.args:
-            continue
-        first = node.args[0]
-        if isinstance(first, ast.Constant) and isinstance(first.value, str):
-            has_words = re.search(r"[A-Za-z\u4e00-\u9fff]", first.value)
-            if has_words and first.value not in ALLOWED_LITERALS:
-                offenders.append(f"app.py:{node.lineno} st.{node.func.attr}({first.value[:40]!r})")
+        fn = node.func.attr
+
+        checks: list[tuple[str, ast.AST]] = []
+        if fn in TEXT_FIRST_FUNCS and node.args:
+            checks.append(("arg0", node.args[0]))
+        checks += [(f"{kw.arg}=", kw.value) for kw in node.keywords
+                   if kw.arg in TEXT_KEYWORDS]
+
+        for where, expr in checks:
+            if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
+                if expr.value in ALLOWED_LITERALS:
+                    continue
+            if _has_words(expr):
+                offenders.append(f"app.py:{node.lineno} st.{fn}({where}) — {ast.unparse(expr)[:45]}")
     return offenders
 
 
 def test_no_hardcoded_ui_text_in_app():
     """界面上出现的文案必须来自 i18n —— 正则/人眼都会漏, 所以用语法树查"""
-    assert not _literal_ui_strings(APP.read_text()), (
-        "发现硬编码的界面文案: " + "; ".join(_literal_ui_strings(APP.read_text()))
-    )
+    source = APP.read_text()
+    offenders = _literal_ui_strings(source)
+    assert not offenders, "发现硬编码的界面文案: " + "; ".join(offenders)
+
+
+def test_hardcoded_guard_catches_evasions():
+    """闸门必须真的拦得住 —— 这三种写法是子智能体用来绕过旧版闸门的"""
+    evasions = [
+        'st.header(f"Hardcoded {x}")',                    # f-string
+        'st.markdown("Hard" + "coded")',                   # 拼接
+        'st.image("i.png", caption="Hardcoded caption")',  # 关键字参数
+        'st.info("plain literal")',                        # 直接字面量
+    ]
+    for src in evasions:
+        assert _literal_ui_strings(src), f"这种写法绕过了闸门: {src}"
+    # 不该误报的写法
+    for src in ['st.dataframe(df)', 'st.metric(t(lang, "k"), f"{v:.1f}")',
+                'st.altair_chart(chart, width="stretch")', 'st.markdown("---")']:
+        assert not _literal_ui_strings(src), f"误报了: {src}"
 
 
 # app.py 用 f"cat_{k}" 这类动态键拼出来的文案族
@@ -130,25 +172,57 @@ DYNAMIC_KEYS = (
 )
 
 
+def _usage_corpus() -> str:
+    """统计"谁用了哪些文案键"时的语料。
+
+    必须排除 i18n.py 自己 —— 否则每个键的定义本身就算"被使用", 闸门形同虚设
+    (子智能体证明过: 那时删掉 app.py 里全部 t(lang,"def_header") 调用, 测试照样绿)。
+    """
+    root = APP.parent
+    files = [APP, *sorted((root / "nbastars").glob("*.py")), *sorted((root / "tests").glob("*.py"))]
+    files = [f for f in files if f.name != "i18n.py"]
+    return "\n".join(f.read_text() for f in files)
+
+
 def test_no_dead_i18n_keys():
     """文案表里不该留没人用的键 —— 曾经留下过 lang_label / scoring_chart_x"""
-    root = APP.parent
-    corpus = "\n".join(
-        p.read_text()
-        for p in [APP, *sorted((root / "nbastars").glob("*.py")), *sorted((root / "tests").glob("*.py"))]
-    )
-    used = set(re.findall(r'"([a-z0-9_]+)"', corpus)) | set(DYNAMIC_KEYS)
+    used = set(re.findall(r'"([a-z0-9_]+)"', _usage_corpus())) | set(DYNAMIC_KEYS)
     dead = sorted(set(STRINGS["en"]) - used)
     assert not dead, f"这些文案键已无人使用: {dead}"
 
 
+def test_dead_key_guard_catches_unused_key():
+    """把曾经真实存在的死键放回文案表, 闸门必须报出来。
+
+    注意键名要用拼接写 —— 直接写成字面量的话, 这句断言本身就会出现在语料里,
+    等于自己宣称"有人在用", 闸门就又失效了。
+    """
+    dead_key = "col_stl" + "_rank"          # 曾经真的存在过, 且没人引用
+    assert dead_key not in _usage_corpus(), "测试代码污染了语料"
+    STRINGS["en"][dead_key] = "Steals rank"
+    try:
+        used = set(re.findall(r'"([a-z0-9_]+)"', _usage_corpus())) | set(DYNAMIC_KEYS)
+        dead = sorted(set(STRINGS["en"]) - used)
+        assert dead_key in dead, "闸门没有识别出没人用的键"
+    finally:
+        del STRINGS["en"][dead_key]
+
+
 def test_every_key_referenced_by_app_is_defined():
-    """反过来也要查: app.py 里 t(lang, "xxx") 引用的键必须存在。
+    r"""反过来也要查: app.py 里 t(...) 引用的键必须存在。
 
     实际踩过: 新写的防守影响力视图引用了 imp_predicted / imp_actual, 但忘了往文案表里加,
     测试全绿而界面直接 KeyError 崩掉。
+    语言参数不一定是 lang (set_page_config 那行用的是 _DEFAULT_LANG), 所以用 \w+ 匹配。
     """
     source = APP.read_text()
-    referenced = set(re.findall(r't\(lang,\s*"([a-z0-9_]+)"', source)) | set(DYNAMIC_KEYS)
+    referenced = set(re.findall(r't\(\s*\w+\s*,\s*"([a-z0-9_]+)"', source)) | set(DYNAMIC_KEYS)
     missing = sorted(referenced - set(STRINGS["en"]) - set(STRINGS["zh"]))
     assert not missing, f"app.py 引用了不存在的文案键: {missing}"
+
+
+def test_reverse_guard_sees_non_lang_first_argument():
+    """_DEFAULT_LANG 这种写法的引用也要被扫到"""
+    src = 'st.set_page_config(page_title=t(_DEFAULT_LANG, "page_title_typo"))'
+    ref = set(re.findall(r't\(\s*\w+\s*,\s*"([a-z0-9_]+)"', src))
+    assert ref == {"page_title_typo"}, "反向闸门漏掉了非 lang 命名的语言参数"

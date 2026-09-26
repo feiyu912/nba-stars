@@ -239,10 +239,6 @@ STRINGS: dict[str, dict[str, str]] = {
             "count, and the whole playmaking index is multiplied by that estimate. Affected "
             "players are marked **Estimated**: {names}"
         ),
-        "col_stl_rank": "Steals rank",
-        "col_blk_rank": "Blocks rank",
-        "col_orb_rank": "Off. rebound rank",
-        "col_drb_rank": "Def. rebound rank",
         "thin_name_item": "{name} ({n} seasons)",
         "bd_share": "Share of points (%)",
         "lk_source": "Source",
@@ -499,10 +495,6 @@ STRINGS: dict[str, dict[str, str]] = {
             "失误数估算出来的**，而且整个组织指数都要乘以这个估算值 —— 他们的名次因此含估算成分，"
             "已在表中标为**估算**：{names}"
         ),
-        "col_stl_rank": "抢断名次",
-        "col_blk_rank": "盖帽名次",
-        "col_orb_rank": "进攻篮板名次",
-        "col_drb_rank": "防守篮板名次",
         "thin_name_item": "{name}（{n} 个赛季）",
         "bd_share": "得分占比（%）",
         "lk_source": "得分来源",

@@ -141,7 +141,7 @@ if view == "scoring":
                  alt.Tooltip("PPG:Q", title=t(lang, "col_ppg")),
                  alt.Tooltip("TS_pct:Q", title=t(lang, "col_ts"))]
     ).properties(height=max(top_n * 28, 400))
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
     table = df[["rank_int", "player", "PPG", "TS_pct", "pct_FT", "purity", "GP"]].rename(columns={
         "rank_int": t(lang, "col_rank"), "player": t(lang, "col_player"),
@@ -149,7 +149,7 @@ if view == "scoring":
         "pct_FT": t(lang, "col_ft_share"), "purity": t(lang, "col_purity"),
         "GP": t(lang, "col_gp"),
     })
-    st.dataframe(table.reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+    st.dataframe(table.reset_index(drop=True), height=min(top_n * 38, 900))
 
 # ════════════════════════════════
 elif view == "breakdown":
@@ -172,7 +172,7 @@ elif view == "breakdown":
                  alt.Tooltip("src:N", title=t(lang, "lk_source")),
                  alt.Tooltip("pct:Q", title=t(lang, "bd_share"))]
     ).properties(height=500)
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
     cols = {"player": t(lang, "col_player"), "PPG": t(lang, "col_ppg"),
             "purity": t(lang, "col_purity"), "pct_2P": t(lang, "bd_2p"),
@@ -181,13 +181,11 @@ elif view == "breakdown":
     with col1:
         st.subheader(t(lang, "bd_top_purity"))
         pure = career.sort_values("purity", ascending=False).head(10)
-        st.dataframe(pure[list(cols)].rename(columns=cols).reset_index(drop=True),
-                     use_container_width=True)
+        st.dataframe(pure[list(cols)].rename(columns=cols).reset_index(drop=True))
     with col2:
         st.subheader(t(lang, "bd_top_ft"))
         impure = career.sort_values("purity").head(10)
-        st.dataframe(impure[list(cols)].rename(columns=cols).reset_index(drop=True),
-                     use_container_width=True)
+        st.dataframe(impure[list(cols)].rename(columns=cols).reset_index(drop=True))
 
 # ════════════════════════════════
 elif view == "impact":
@@ -205,14 +203,14 @@ elif view == "impact":
                  alt.Tooltip("PPG:Q", title=t(lang, "col_ppg")),
                  alt.Tooltip("APG:Q", title=t(lang, "col_apg"))]
     ).properties(height=max(top_n * 28, 400))
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
     table = df[["rank_int", "player", "PPG", "APG", "TS_pct", "GP"]].rename(columns={
         "rank_int": t(lang, "col_rank"), "player": t(lang, "col_player"),
         "PPG": t(lang, "col_ppg"), "APG": t(lang, "col_apg"),
         "TS_pct": t(lang, "col_ts"), "GP": t(lang, "col_gp"),
     })
-    st.dataframe(table.reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+    st.dataframe(table.reset_index(drop=True), height=min(top_n * 38, 900))
 
 # ════════════════════════════════
 elif view == "playmaking":
@@ -230,7 +228,7 @@ elif view == "playmaking":
                  alt.Tooltip("APG:Q", title=t(lang, "col_apg")),
                  alt.Tooltip("ast_tov:Q", title=t(lang, "lk_ast_tov"))]
     ).properties(height=max(top_n * 28, 400))
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
     # 助失比在 1977-78 之前是估算值, 必须让人看见 —— 组织指数整个乘在这个估算值上
     pm = load_dimension("playmaking_ranking.csv")[["player", "TOV_imputed_share"]]
@@ -242,7 +240,7 @@ elif view == "playmaking":
         "APG": t(lang, "col_apg"), "ast_tov": t(lang, "lk_ast_tov"),
         "estimated": t(lang, "col_estimated"), "GP": t(lang, "col_gp"),
     })
-    st.dataframe(table.reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+    st.dataframe(table.reset_index(drop=True), height=min(top_n * 38, 900))
 
     affected = df[(df["TOV_imputed_share"].fillna(0) > 0.5)]["player"].tolist()
     if affected:
@@ -268,7 +266,7 @@ elif view == "defense":
                  alt.Tooltip("reg_BPG:Q", title=t(lang, "col_blk")),
                  alt.Tooltip("reg_def:Q", title=t(lang, "col_stl_blk"))]
     ).properties(height=max(len(chart_df) * 28, 400))
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
     table = df[["def_rank", "player", "reg_SPG", "reg_BPG", "reg_def",
                 "seasons_with_def_data", "po_GP"]].rename(columns={
@@ -277,8 +275,7 @@ elif view == "defense":
         "reg_def": t(lang, "col_stl_blk"), "seasons_with_def_data": t(lang, "col_sample"),
         "po_GP": t(lang, "col_playoff_gp"),
     })
-    st.dataframe(table.reset_index(drop=True), use_container_width=True,
-                 height=min(len(table) * 38, 900))
+    st.dataframe(table.reset_index(drop=True), height=min(len(table) * 38, 900))
 
     no_data = defense_data[defense_data["defense_stats_missing"] == True]["player"].tolist()  # noqa: E712
     if no_data:
@@ -308,12 +305,12 @@ elif view == "def_split":
     with col1:
         st.subheader(t(lang, "def_split_stl"))
         st.dataframe(steals[["stl_rank", "player", "reg_SPG"]].rename(columns=cols)
-                     .reset_index(drop=True), use_container_width=True,
+                     .reset_index(drop=True),
                      height=min(top_n * 38, 900))
     with col2:
         st.subheader(t(lang, "def_split_blk"))
         st.dataframe(blocks[["blk_rank", "player", "reg_BPG"]].rename(columns=cols)
-                     .reset_index(drop=True), use_container_width=True,
+                     .reset_index(drop=True),
                      height=min(top_n * 38, 900))
 
     no_data = d[d["defense_stats_missing"] == True]["player"].tolist()  # noqa: E712
@@ -336,8 +333,7 @@ elif view == "def_impact":
         "def_impact_score": t(lang, "imp_predicted"), "d_dpm": t(lang, "imp_actual"),
         "reg_SPG": t(lang, "col_stl"), "reg_BPG": t(lang, "col_blk"),
     })
-    st.dataframe(table.reset_index(drop=True), use_container_width=True,
-                 height=min(len(table) * 38, 900))
+    st.dataframe(table.reset_index(drop=True), height=min(len(table) * 38, 900))
 
     no_data = d[d["defense_stats_missing"] == True]["player"].tolist()  # noqa: E712
     if no_data:
@@ -362,7 +358,7 @@ elif view == "rebounding":
                  alt.Tooltip("OREB:Q", title=t(lang, "col_orb")),
                  alt.Tooltip("DREB:Q", title=t(lang, "col_drb"))]
     ).properties(height=max(top_n * 28, 400))
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
     show = keep_columns(df, ["rank_int", "player", "RPG", "OREB", "DREB", "po_GP"])
     table = show.rename(columns={
@@ -370,8 +366,7 @@ elif view == "rebounding":
         "RPG": t(lang, "col_rpg"), "OREB": t(lang, "col_orb"), "DREB": t(lang, "col_drb"),
         "po_GP": t(lang, "col_playoff_gp"),
     })
-    st.dataframe(table.reset_index(drop=True), use_container_width=True,
-                 height=min(len(table) * 38, 900))
+    st.dataframe(table.reset_index(drop=True), height=min(len(table) * 38, 900))
 
     no_split = reb_data[reb_data["rebound_split_missing"] == True]["player"].tolist()  # noqa: E712
     if no_split:
@@ -393,14 +388,14 @@ elif view == "reb_split":
         t1 = orb[["oreb_rank", "player", "peak_OREB"]].rename(columns={
             "oreb_rank": t(lang, "col_rank"), "player": t(lang, "col_player"),
             "peak_OREB": t(lang, "col_peak")})
-        st.dataframe(t1.reset_index(drop=True), use_container_width=True,
+        st.dataframe(t1.reset_index(drop=True),
                      height=min(top_n * 38, 900))
     with col2:
         st.subheader(t(lang, "reb_split_drb"))
         t2 = drb[["dreb_rank", "player", "peak_DREB"]].rename(columns={
             "dreb_rank": t(lang, "col_rank"), "player": t(lang, "col_player"),
             "peak_DREB": t(lang, "col_peak")})
-        st.dataframe(t2.reset_index(drop=True), use_container_width=True,
+        st.dataframe(t2.reset_index(drop=True),
                      height=min(top_n * 38, 900))
 
     no_split = r[r["rebound_split_missing"] == True]["player"].tolist()  # noqa: E712
@@ -413,9 +408,16 @@ elif view == "playoff":
     st.header(t(lang, "po_header"))
     st.markdown(t(lang, "po_intro"))
 
-    metric = st.radio(t(lang, "po_metric"), options=["scoring", "rebounds", "assists"],
-                      horizontal=True,
-                      format_func=lambda k: t(lang, f"po_metric_{k}"))
+    METRICS = ["scoring", "rebounds", "assists"]
+    metric_labels = [t(lang, f"po_metric_{k}") for k in METRICS]
+    prev_metric = st.session_state.get("po_metric_key")
+    metric_choice = st.radio(
+        t(lang, "po_metric"), options=metric_labels, horizontal=True,
+        index=METRICS.index(prev_metric) if prev_metric in METRICS else 0,
+        key=f"po_metric_{lang}",
+    )
+    metric = METRICS[metric_labels.index(metric_choice)]
+    st.session_state["po_metric_key"] = metric
     reg_col = {"scoring": "PPG", "rebounds": "reb_RPG", "assists": "APG"}[metric]
     po_col = {"scoring": "po_PPG", "rebounds": "po_RPG", "assists": "po_APG"}[metric]
     delta_col = {"scoring": "po_delta_ppg", "rebounds": "po_delta_rpg",
@@ -431,13 +433,11 @@ elif view == "playoff":
     col1, col2 = st.columns(2)
     with col1:
         st.subheader(t(lang, "po_risers"))
-        st.dataframe(df.head(15)[list(cols)].rename(columns=cols).reset_index(drop=True),
-                     use_container_width=True)
+        st.dataframe(df.head(15)[list(cols)].rename(columns=cols).reset_index(drop=True))
     with col2:
         st.subheader(t(lang, "po_drops"))
         drops = df.tail(15).sort_values(delta_col)
-        st.dataframe(drops[list(cols)].rename(columns=cols).reset_index(drop=True),
-                     use_container_width=True)
+        st.dataframe(drops[list(cols)].rename(columns=cols).reset_index(drop=True))
 
     top20 = df.head(20)[["player", delta_col]].copy()
     chart = alt.Chart(top20).mark_bar(color="#ffd700").encode(
@@ -446,7 +446,7 @@ elif view == "playoff":
         tooltip=[alt.Tooltip("player:N", title=t(lang, "col_player")),
                  alt.Tooltip(f"{delta_col}:Q", title=t(lang, "po_col_change"))]
     ).properties(height=max(len(top20) * 26, 400))
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 # ════════════════════════════════
 elif view == "h2h":
@@ -461,8 +461,7 @@ elif view == "h2h":
             "impact_rank": t(lang, "view_impact"), "play_rank": t(lang, "view_playmaking"),
             "def_rank": t(lang, "view_defense"), "reb_rank": t(lang, "view_rebounding"),
             "PPG": t(lang, "col_ppg"), "APG": t(lang, "col_apg")}
-    st.dataframe(compare.rename(columns=cols).reset_index(drop=True),
-                 use_container_width=True, height=min(top_n * 38, 900))
+    st.dataframe(compare.rename(columns=cols).reset_index(drop=True), height=min(top_n * 38, 900))
 
 # ════════════════════════════════
 elif view == "lookup":
@@ -517,7 +516,7 @@ elif view == "lookup":
         tooltip=[alt.Tooltip("src:N", title=t(lang, "lk_source")),
                  alt.Tooltip("pct:Q", title=t(lang, "bd_share"))]
     ).properties(height=180)
-    st.altair_chart(breakdown_chart, use_container_width=True)
+    st.altair_chart(breakdown_chart, width="stretch")
 
     st.subheader(t(lang, "lk_analysis"))
     factors = []

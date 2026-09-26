@@ -13,7 +13,7 @@ streamlit run app.py                     # 仪表盘: http://localhost:8501
 其他命令 (见 `Makefile`):
 
 ```bash
-make test        # 27 个测试: 数据契约 + 排名引擎 + 指标构造
+make test        # 测试套件: 数据契约 / 排名引擎 / 指标构造 / 界面文案
 make verify      # 常规赛数据校验 (对照 Basketball-Reference, 需先下载参考数据)
 make lint        # ruff
 ```
@@ -250,7 +250,7 @@ scripts/
 └── repair_dataset.py        # 数据修复: 多队赛季去重 + 当季补齐
 
 notebooks/                   # 薄壳: 跑维度 + 打印分析报告
-tests/                       # 27 个测试 (数据契约 / 引擎 / 指标构造)
+tests/                       # 测试: 数据契约 / 引擎 / 指标构造 / 界面文案
 data/                        # 原始数据 + 101 人 ID 映射
 results/                     # 各维度排名 + all_rankings.csv (仪表盘读这一份)
 app.py                       # Streamlit 仪表盘
