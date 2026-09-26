@@ -143,7 +143,21 @@ def run_defense(reg: pd.DataFrame, po: pd.DataFrame, db: pd.DataFrame) -> pd.Dat
     res["def_impact_rank"] = res["def_impact_score"].rank(ascending=False, method="min").astype("Int64")
 
     res = res.rename(columns={"reg_def_output": "reg_def"})   # 展示用名 (与仪表盘一致)
+
+    # 抢断榜 / 盖帽榜: 两种技能分开, 沿用同一套算法与最小样本规则
+    for prefix, view_fn, agg, views in [
+        ("stl", dimensions.steals_views, dimensions.STEALS_AGG, dimensions.STEALS_VIEWS),
+        ("blk", dimensions.blocks_views, dimensions.BLOCKS_AGG, dimensions.BLOCKS_VIEWS),
+    ]:
+        sub = engine.build_dimension(
+            view_fn(reg), po, name=prefix, key=prefix, agg=agg, views=views,
+            playoff_mode="experience", eligible=eligible,
+        )
+        res = res.merge(sub[["player", f"{prefix}_rank"]], on="player", how="left")
+    print(f"    抢断榜 {int(res['stl_rank'].notna().sum())} 人 | 盖帽榜 {int(res['blk_rank'].notna().sum())} 人")
+
     _write(res[["player", "def_rank", "def_tied", "reg_SPG", "reg_BPG", "reg_def",
+                "stl_rank", "blk_rank",
                 "po_GP", "defense_stats_missing", "sample_too_small", "seasons_with_def_data",
                 "total_A_rank", "total_C_rank",
                 "def_impact_rank", "def_impact_score", "d_dpm"]], "defense_ranking.csv")
@@ -177,7 +191,8 @@ def run_rebounding(reb: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
     res["oreb_rank"] = res["peak_OREB"].rank(ascending=False, method="min").astype("Int64")
     res["dreb_rank"] = res["peak_DREB"].rank(ascending=False, method="min").astype("Int64")
     _write(res[["player", "reb_rank", "reb_tied", "RPG", "OREB", "DREB",
-                "oreb_rank", "dreb_rank", "po_GP", "rebound_split_missing",
+                "oreb_rank", "dreb_rank", "peak_OREB", "peak_DREB",
+                "po_GP", "rebound_split_missing",
                 "total_A_rank", "total_C_rank"]], "rebounding_ranking.csv")
     return res
 

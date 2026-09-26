@@ -16,7 +16,6 @@ LANGS = {"en": "English", "zh": "中文"}
 STRINGS: dict[str, dict[str, str]] = {
     # ══ 全局 ══
     "en": {
-        "lang_label": "Language",
         "app_title": "🏀 NBA Player Analysis System",
         "name_sep": ", ",
         "app_subtitle": "**101 players | 1948-2026 | multi-dimensional, era-adjusted rankings**",
@@ -42,7 +41,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "view_h2h": "Head-to-Head",
         "view_defense": "Defense Ranking",
         "view_rebounding": "Rebounding Ranking",
-        "view_lookup": "Player Lookup",
         "na": "N/A",
         "col_rank": "Rank",
         "col_player": "Player",
@@ -72,7 +70,6 @@ STRINGS: dict[str, dict[str, str]] = {
             "- **Two views** (per-game and per-minute, both era-adjusted) combined by median rank\n\n"
             "*Assists and playmaking are NOT included — see Playmaking Ranking for that.*"
         ),
-        "scoring_chart_x": "Career points per game",
 
         # ══ 影响力 ══
         "impact_header": "⚡ Offensive Impact",
@@ -96,8 +93,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "than 10 in 2025\n"
             "- **Playoff 3x weight**: creating under pressure matters more\n"
             "- **AST/TOV**: creating without wasting possessions — Stockton (3.7) vs Westbrook (2.0)\n\n"
-            "*Turnovers were not recorded before 1977-78, so 19 players have no AST/TOV; those rows "
-            "are flagged instead of filled in.*"
+            "*Turnovers were not recorded before 1977-78, so AST/TOV for those players is estimated "
+            "from a league-average turnover count and marked **Estimated** — never silently filled.*"
         ),
 
         # ══ 得分结构 ══
@@ -129,7 +126,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "po_col_po": "Playoffs",
         "po_col_change": "Change",
         "po_col_games": "Playoff games",
-        "po_chart": "Scoring change in the playoffs",
 
         # ══ 对比 ══
         "h2h_header": "🔄 Cross-Ranking Comparison",
@@ -229,6 +225,72 @@ STRINGS: dict[str, dict[str, str]] = {
         "f_po_decline": "⚠️ Declines in the playoffs ({po:.1f} vs {reg:.1f}, {games} games)",
         "f_limited_po": "⚠️ Limited playoff experience ({games} games)",
 
+        # ══ 新分类 / 新视图 ══
+        "page_title": "NBA Player Analysis",
+        "cat_compare": "🔀 Cross-dimension",
+        "view_def_split": "Steals & Blocks",
+        "view_def_impact": "Defensive Impact",
+        "view_reb_split": "Off / Def Rebounds",
+        "col_peak": "Peak 5-season avg",
+        "col_estimated": "Estimated",
+        "play_tov_note": (
+            "Turnovers were not recorded before 1977-78. For players whose careers began before "
+            "then, AST/TOV is not missing data — it is *estimated* from a league-average turnover "
+            "count, and the whole playmaking index is multiplied by that estimate. Affected "
+            "players are marked **Estimated**: {names}"
+        ),
+        "col_stl_rank": "Steals rank",
+        "col_blk_rank": "Blocks rank",
+        "col_orb_rank": "Off. rebound rank",
+        "col_drb_rank": "Def. rebound rank",
+        "thin_name_item": "{name} ({n} seasons)",
+        "bd_share": "Share of points (%)",
+        "lk_source": "Source",
+
+        "def_split_header": "🛡️ Steals vs Blocks",
+        "def_split_intro": (
+            "**Two different defensive skills.** Steals measure perimeter anticipation, blocks "
+            "measure rim protection — combining them into one number lets a guard's steals and a "
+            "centre's blocks cancel each other out.\n\n"
+            "Both rankings use the same era-adjusted, two-view engine as the main defense ranking, "
+            "and the same sample rule: players without steals/blocks data, or with fewer than 5 "
+            "seasons of it, are not ranked."
+        ),
+        "def_split_stl": "🏃 Top steals",
+        "def_split_blk": "🚫 Top blocks",
+
+        "def_impact_header": "📉 Defensive Impact",
+        "def_impact_intro": (
+            "**Ridge regression trained on D-DPM** (a third-party defensive metric, used as a proxy "
+            "target). Features are era-adjusted steals/blocks Z-scores plus career rebounds.\n\n"
+            "*D-DPM is a proxy, not ground truth — the model measures how well box scores reproduce "
+            "that metric, not true defensive impact.*"
+        ),
+        "imp_predicted": "Model prediction",
+        "imp_actual": "Actual D-DPM",
+        "def_impact_model": (
+            "Model quality: {n} training players, 5-fold cross-validated R² = {r2:.3f}, "
+            "Spearman = {rho:.3f}"
+        ),
+
+        "reb_split_header": "🏀 Offensive vs Defensive Rebounds",
+        "reb_split_intro": (
+            "**Creating second chances vs ending possessions.** Offensive rebounds extend a "
+            "possession; defensive rebounds end the opponent's. The two reward different skills, so "
+            "they are ranked separately here.\n\n"
+            "Both use the peak-5-season average of the per-game rate. The 11 players whose careers "
+            "ended before 1973-74 have no split at all and are not ranked; their total-rebound rank "
+            "on the main page is unaffected."
+        ),
+        "reb_split_orb": "🔥 Top offensive rebounders",
+        "reb_split_drb": "🧱 Top defensive rebounders",
+
+        "po_metric": "Metric",
+        "po_metric_scoring": "Scoring",
+        "po_metric_rebounds": "Rebounds",
+        "po_metric_assists": "Assists",
+        "po_chart": "{metric} change in the playoffs",
+
         # ══ 页脚 ══
         "footer_sources": (
             "*Regular season: NBA.com official API (1948-2024) + Basketball-Reference (2025-26) | "
@@ -241,7 +303,6 @@ STRINGS: dict[str, dict[str, str]] = {
     },
 
     "zh": {
-        "lang_label": "语言",
         "app_title": "🏀 NBA 球员分析系统",
         "name_sep": "、",
         "app_subtitle": "**101 名球员 | 1948-2026 | 多维度、时代修正排名**",
@@ -265,7 +326,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "view_h2h": "跨维度对比",
         "view_defense": "防守排名",
         "view_rebounding": "篮板排名",
-        "view_lookup": "球员查询",
         "na": "无数据",
         "col_rank": "名次",
         "col_player": "球员",
@@ -293,7 +353,6 @@ STRINGS: dict[str, dict[str, str]] = {
             "- **两个视角**（场均与每分钟，均已做时代修正）取中位数名次合并\n\n"
             "*这里不含助攻和组织 —— 见「组织能力排名」。*"
         ),
-        "scoring_chart_x": "生涯场均得分",
 
         "impact_header": "⚡ 进攻影响力",
         "impact_intro": (
@@ -313,7 +372,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "- **时代修正**：1962 年场均 10 次助攻（只有 Oscar Robertson 做到）比 2025 年的 10 次更难得\n"
             "- **季后赛 3 倍加权**：压力下的组织更值钱\n"
             "- **助攻失误比**：创造而不浪费 —— Stockton（3.7）对 Westbrook（2.0）\n\n"
-            "*1977-78 赛季之前不记录失误，因此有 19 名球员没有助攻失误比；这些行只做标记，不填充。*"
+            "*1977-78 赛季之前不记录失误，这些球员的助攻失误比是按联盟平均误差数估算的，表中标为**估算** —— "
+            "不做静默填充。*"
         ),
 
         "bd_header": "🔍 得分结构",
@@ -341,7 +401,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "po_col_po": "季后赛",
         "po_col_change": "变化",
         "po_col_games": "季后赛场次",
-        "po_chart": "季后赛得分变化",
 
         "h2h_header": "🔄 跨维度对比",
         "h2h_intro": (
@@ -427,6 +486,63 @@ STRINGS: dict[str, dict[str, str]] = {
         "f_po_riser": "✅ 季后赛更强（{po:.1f} 对 {reg:.1f}，{games} 场）",
         "f_po_decline": "⚠️ 季后赛下滑（{po:.1f} 对 {reg:.1f}，{games} 场）",
         "f_limited_po": "⚠️ 季后赛经验有限（{games} 场）",
+
+        "page_title": "NBA 球员分析",
+        "cat_compare": "🔀 横向对比",
+        "view_def_split": "抢断与盖帽",
+        "view_def_impact": "防守影响力",
+        "view_reb_split": "进攻与防守篮板",
+        "col_peak": "巅峰 5 年均值",
+        "col_estimated": "估算",
+        "play_tov_note": (
+            "1977-78 赛季之前不记录失误。对这些球员来说，助失比不是「缺数据」，而是**用联盟平均"
+            "失误数估算出来的**，而且整个组织指数都要乘以这个估算值 —— 他们的名次因此含估算成分，"
+            "已在表中标为**估算**：{names}"
+        ),
+        "col_stl_rank": "抢断名次",
+        "col_blk_rank": "盖帽名次",
+        "col_orb_rank": "进攻篮板名次",
+        "col_drb_rank": "防守篮板名次",
+        "thin_name_item": "{name}（{n} 个赛季）",
+        "bd_share": "得分占比（%）",
+        "lk_source": "得分来源",
+
+        "def_split_header": "🛡️ 抢断与盖帽",
+        "def_split_intro": (
+            "**两种不同的防守技能。** 抢断体现外线预判，盖帽体现护框 —— 合成一个「防守产出」会让"
+            "后卫的抢断和中锋的盖帽互相抵消。\n\n"
+            "两个榜单沿用主防守榜同一套时代修正与双视角算法，最小样本规则也相同：没有抢断/盖帽数据、"
+            "或有效赛季不足 5 个的球员不参与排名。"
+        ),
+        "def_split_stl": "🏃 抢断榜",
+        "def_split_blk": "🚫 盖帽榜",
+
+        "def_impact_header": "📉 防守影响力",
+        "def_impact_intro": (
+            "**用岭回归拟合 D-DPM**（第三方防守指标，作为代理目标）。特征是时代修正后的抢断/盖帽 "
+            "Z 分数，加上生涯篮板。\n\n"
+            "*D-DPM 是代理指标，不是真值 —— 模型衡量的是「基础数据能在多大程度上复现该指标」，"
+            "不代表真实的防守影响力。*"
+        ),
+        "imp_predicted": "模型预测值",
+        "imp_actual": "实际 D-DPM",
+        "def_impact_model": "模型质量：训练样本 {n} 人，5 折交叉验证 R² = {r2:.3f}，Spearman = {rho:.3f}",
+
+        "reb_split_header": "🏀 进攻篮板与防守篮板",
+        "reb_split_intro": (
+            "**创造二次机会，还是终结对手回合？** 进攻篮板延续进攻机会，防守篮板上终结对手的回合，"
+            "两种能力奖励的东西不同，所以分开排名。\n\n"
+            "两个榜都用场均数据的巅峰 5 年均值。生涯全部在 1973-74 之前的 11 名球员没有拆分数据，"
+            "不参与排名；他们在主榜上的总篮板名次不受影响。"
+        ),
+        "reb_split_orb": "🔥 进攻篮板榜",
+        "reb_split_drb": "🧱 防守篮板榜",
+
+        "po_metric": "指标",
+        "po_metric_scoring": "得分",
+        "po_metric_rebounds": "篮板",
+        "po_metric_assists": "助攻",
+        "po_chart": "季后赛{metric}的变化",
 
         "footer_sources": (
             "*常规赛：NBA.com 官方接口（1948-2024）+ Basketball-Reference（2025-26）| "

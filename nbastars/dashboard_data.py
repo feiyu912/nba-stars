@@ -41,10 +41,10 @@ def build_career_frame(data_dir: Path, results_dir: Path) -> pd.DataFrame:
     # 让早期球员的助失比全部等于 APG/2.5, 是个假指标, 所以保留缺失。
     career["ast_tov"] = (career["APG"] / career["TOV"]).round(2)
 
-    po_avg = po.groupby("player").agg({"PPG": "mean", "APG": "mean", "GP": "sum"}).round(2).reset_index()
-    po_avg.columns = ["player", "po_PPG", "po_APG", "po_GP"]
+    po_avg = po.groupby("player").agg(
+        {"PPG": "mean", "APG": "mean", "RPG": "mean", "GP": "sum"}).round(2).reset_index()
+    po_avg.columns = ["player", "po_PPG", "po_APG", "po_RPG", "po_GP"]
     career = career.merge(po_avg, on="player", how="left")
-    career["po_delta"] = (career["po_PPG"] - career["PPG"]).round(2)
 
     career = career.merge(ranks[["player"] + RANK_COLUMNS], on="player", how="left")
     # 篮板明细只在 total rebounding 之外补 RPG/OREB/DREB 三列; 名次一律用 all_rankings
@@ -52,6 +52,11 @@ def build_career_frame(data_dir: Path, results_dir: Path) -> pd.DataFrame:
         rebounding[["player", "RPG", "OREB", "DREB"]].rename(
             columns={"RPG": "reb_RPG", "OREB": "reb_OREB", "DREB": "reb_DREB"}),
         on="player", how="left")
+
+    # 季后赛 vs 常规赛的差值, 三个维度都用同一套口径
+    career["po_delta_ppg"] = (career["po_PPG"] - career["PPG"]).round(2)
+    career["po_delta_rpg"] = (career["po_RPG"] - career["reb_RPG"]).round(2)
+    career["po_delta_apg"] = (career["po_APG"] - career["APG"]).round(2)
     return career
 
 

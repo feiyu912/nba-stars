@@ -23,17 +23,24 @@ make lint        # ruff
 
 ## Dashboard
 
-| View | What it shows |
-|------|--------------|
-| **Scoring Ranking** | Pure scoring ability: who puts the ball in the basket best |
-| **Impact Ranking** | Total offensive contribution (ridge regression on O-DPM) |
-| **Playmaking Ranking** | Who creates for others (APG × AST/TOV, era-adjusted) |
-| **Defense Ranking** | STL+BLK based defensive output + D-DPM model |
-| **Rebounding Ranking** | Total / offensive / defensive boards, separately ranked |
-| **Scoring Breakdown** | Where points come from: 2P / 3P / FT structure |
-| **Playoff Performance** | Who steps up in the playoffs vs regular season |
-| **Head-to-Head** | Cross-dimension comparison |
-| **Player Lookup** | Deep dive into any player with ranking explanation |
+The dashboard is bilingual (English / 中文) — switch at the top of the sidebar. Once a language
+is selected no text from the other language appears (the only exceptions are the switcher itself
+and player names; enforced by tests).
+
+Views are grouped by dimension, and each dimension offers the sub-views its data actually supports:
+
+| Category | Views |
+|----------|-------|
+| 🏀 Offense | Scoring Ranking · Scoring Breakdown (2P/3P/FT) · Offensive Impact · Playmaking |
+| 🛡️ Defense | Defense Ranking · **Steals & Blocks** (two skills, ranked separately) · **Defensive Impact** (D-DPM) |
+| 📊 Rebounding | Rebounding Ranking · **Off / Def Rebounds** (separately ranked) |
+| 🔀 Cross-dimension | Playoff Performance (scoring / rebounds / assists) · Head-to-Head |
+| 🔎 Player Lookup | Full profile with factor-by-factor explanation |
+
+The split views exist because combining steals with blocks, or offensive with defensive rebounds,
+lets two different skills cancel each other out. Defense has fewer views than offense for a real
+reason, not an organisational one: the NBA has never recorded steals/blocks in the playoffs, so
+there is no playoff defense view to build.
 
 ## Results
 
@@ -83,10 +90,16 @@ per-minute view; each playoff game counts 3x a regular-season game.
 ### Rank quality
 
 Ranks are competition ranks (`method="min"`): ties are real ties, and the next rank skips.
-Ranked players per dimension: scoring 101, impact 101, playmaking 101, **defense 90**,
-rebounding 101. Defense is short of 101 because 11 players have no steals/blocks at all
-(NBA did not record them before 1973-74) — they are excluded rather than imputed.
-Unique rank values: scoring 85, impact 101, playmaking 80, defense 71, rebounding 81 — the
+Ranked players per dimension: scoring 101, impact 101, playmaking 101, **defense 82**,
+rebounding 101. Defense is short of 101 because 19 players are excluded, under two rules:
+
+| Rule | Players | Why |
+|------|---------|-----|
+| No steals/blocks at all | 11 | careers entirely before 1973-74, when the NBA started recording them |
+| Fewer than 5 seasons of it | 8 | the peak window is 5 seasons; with 1-4 seasons the "peak" is just an average of those seasons (Jerry West's would be a single 31-game season) |
+
+The steals and blocks sub-rankings apply the same two rules, so they also list 82 players.
+Unique rank values: scoring 85, impact 101, playmaking 80, defense 67, rebounding 81 — the
 ties come from the median-of-two-views step, which collapses players whose two view ranks
 sum to the same value.
 
@@ -168,7 +181,7 @@ a player without the data shows **N/A** and is excluded from that dimension's ra
 | MIN | 1951-52 | 8 player-seasons | excluded from per-minute views |
 | REB | 1950-51 | 3 player-seasons | excluded from rebounding views |
 | SPG / BPG | 1973-74 | 11 players' entire careers | **N/A, not ranked** in defense (`def_rank` is empty) |
-| SPG / BPG (partial) | 1973-74 | 8 players have 1-4 seasons only | ranked, but flagged with `seasons_with_def_data` |
+| SPG / BPG (partial) | 1973-74 | 8 players have only 1-4 seasons | **N/A, not ranked** — too few seasons for a 5-year peak window |
 | OREB / DREB split | 1973-74 | 11 players' entire careers | total rebounds still ranked; ORB/DRB shown as N/A |
 | TOV | 1977-78 | 19 players' entire careers | AST/TOV shown as N/A; playmaking index flagged `TOV_imputed` |
 | FG3M | 1979-80 | — | treated as 0 (no three-point line existed) |
@@ -182,15 +195,17 @@ standing notice about which fields did not exist in which era.
    blocks in 1973-74, turnovers in 1977-78, and the offensive/defensive rebound split in
    1973-74. Players whose careers ended before those dates simply have no data for those
    dimensions. They are excluded (not imputed) and the dashboard lists them explicitly.
-2. **Thin defensive samples.** 8 players have only 1-4 seasons of steals/blocks data (their
-   careers straddle 1973-74). Their ranks come from a tiny sample and the peak-window rule
-   amplifies it — e.g. Jerry West ranks #20 on **one** season (31 games). The
-   `seasons_with_def_data` column and the dashboard warning exist for exactly this. A
-   minimum-sample rule (e.g. require ≥3 seasons) is an open option.
-3. **Fabricated AST/TOV for pre-1977 seasons.** Turnovers weren't recorded, so 19 players'
-   assist-to-turnover ratios cannot be computed; the playmaking index flags these rows
-   (`TOV_imputed`). Note this is the one place a fixed constant (2.5) is still used as a
-   multiplier input; the alternative is a neutral 1.0 multiplier.
+2. **AST/TOV for pre-1977 players is still an estimate, and it matters a lot.** Turnovers
+   were not recorded before 1977-78, so for 19 players the assist-to-turnover ratio is
+   estimated from a league-average turnover count (2.5) and the whole playmaking index is
+   multiplied by that estimate. The dashboard marks these players **Estimated**.
+   This is the last remaining estimated input, and it is not a small effect: replacing it with
+   a neutral multiplier moves **92 of 101 players**, up to 30 positions — Oscar Robertson
+   falls from #6 to #36, Bob Cousy from #14 to #38. In other words his top-10 playmaking rank
+   currently depends on an invented turnover number. Three consistent options are open:
+   neutral 1.0 multiplier (penalises pre-1977 vs modern), no multiplier for anyone (the only
+   era-consistent formula, but it drops AST/TOV from the index), or keep the estimate.
+   Not changed unilaterally because it rewrites a headline ranking.
 4. **Median-of-ranks creates ties.** Combining two views by median rank discards magnitude
    information; players whose two view ranks sum to the same value tie. An alternative is to
    average Z-scored view scores — not adopted here to keep results comparable with earlier runs.
@@ -225,6 +240,8 @@ nbastars/                    # 计算核心 (唯一实现处)
 ├── engine.py                # 排名引擎: 双视角 → 巅峰+生涯 → 季后赛 → 中位数名次
 ├── dimensions.py            # 五个维度的指标构造
 ├── ridge.py                 # 岭回归 + 交叉验证
+├── i18n.py                  # 界面文案的中英文对照 (两种语言键必须一一对应)
+├── dashboard_data.py        # 仪表盘的数据装配 (单独抽出以便测试)
 └── run.py                   # 按正确顺序跑完并写出 results/
 
 scripts/

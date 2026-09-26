@@ -31,7 +31,8 @@ def test_all_players_present(career):
 def test_required_columns_exist(career):
     needed = set(RANK_COLUMNS) | {
         "player", "PPG", "APG", "TS_pct", "GP", "purity", "ast_tov",
-        "pct_2P", "pct_3P", "pct_FT", "po_PPG", "po_GP", "po_delta",
+        "pct_2P", "pct_3P", "pct_FT", "po_PPG", "po_RPG", "po_APG", "po_GP",
+        "po_delta_ppg", "po_delta_rpg", "po_delta_apg",
         "reb_RPG", "reb_OREB", "reb_DREB",
     }
     assert needed <= set(career.columns), f"缺少列: {sorted(needed - set(career.columns))}"

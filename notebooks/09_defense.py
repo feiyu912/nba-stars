@@ -9,6 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import pandas as pd  # noqa: E402
+
 from nbastars import data, run  # noqa: E402
 
 
@@ -23,8 +25,9 @@ def main() -> int:
     print(f"{'Rk':>3s}  {'Player':26s} {'SPG':>5s} {'BPG':>5s} {'S+B':>5s} {'poGP':>5s}  备注")
     print("-" * 80)
     for _, r in res.head(30).iterrows():
-        note = "无抢断/盖帽数据(填充)" if r["defense_stats_missing"] else ""
-        print(f" {int(r['def_rank']):3d}  {r['player']:26s} {r['reg_SPG']:5.1f} "
+        note = "无抢断/盖帽数据(1973-74 前, 不参与排名)" if r["defense_stats_missing"] else ""
+        rank = f"{int(r['def_rank']):3d}" if pd.notna(r["def_rank"]) else "  -"
+        print(f" {rank}  {r['player']:26s} {r['reg_SPG']:5.1f} "
               f"{r['reg_BPG']:5.1f} {r['reg_def']:5.1f} {int(r['po_GP']):5d}  {note}")
 
     print()

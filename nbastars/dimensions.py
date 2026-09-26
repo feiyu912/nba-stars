@@ -92,6 +92,32 @@ DEFENSE_AGG = {"SPG": "mean", "BPG": "mean", "def_output": "mean",
 DEFENSE_VIEWS = {"A": "defA", "C": "defC"}
 
 
+# ── 防守细分: 抢断榜 / 盖帽榜 ──
+# 抢断和外线预判、盖帽和护框是两种不同的防守技能, 合成一个"防守产出"会互相抵消。
+# 比如抢断王未必盖帽多, 中锋盖帽多但抢断少。
+def single_stat_views(df: pd.DataFrame, col: str, prefix: str) -> pd.DataFrame:
+    df = _base(df.copy(), None)
+    df["adj"] = df[col] * df["pace_adj"]
+    df = add_scarcity(df, col)
+    df[f"{prefix}A"] = df["adj"] * df["scarcity"]
+    df[f"{prefix}C"] = per_minute(df, col) * df["competition"] * df["scarcity"]
+    return df
+
+
+def steals_views(df: pd.DataFrame) -> pd.DataFrame:
+    return single_stat_views(df, "SPG", "stl")
+
+
+def blocks_views(df: pd.DataFrame) -> pd.DataFrame:
+    return single_stat_views(df, "BPG", "blk")
+
+
+STEALS_AGG = {"SPG": "mean", "GP": "sum", "MIN": "mean"}
+STEALS_VIEWS = {"A": "stlA", "C": "stlC"}
+BLOCKS_AGG = {"BPG": "mean", "GP": "sum", "MIN": "mean"}
+BLOCKS_VIEWS = {"A": "blkA", "C": "blkC"}
+
+
 # ── 篮板能力 ──
 def rebounding_views(df: pd.DataFrame) -> pd.DataFrame:
     """总篮板两个视角只用 REB (1950-51 起就有记录)。
