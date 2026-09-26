@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from nbastars import dimensions
 from nbastars.era import add_era_columns, career_era_group, per_minute, zscore_by_year
@@ -66,15 +67,23 @@ def test_per_minute_returns_nan_when_minutes_missing():
     assert pd.isna(per_minute(df, "PPG").iloc[0])
 
 
-def test_defense_flags_imputed_seasons():
+def test_defense_does_not_impute_missing_stats():
+    """1973-74 之前没有抢断/盖帽 —— 必须保持缺失, 不许填充。
+
+    填充会造出一个假名次 (曾经用中位数填过, 导致 11 名早期球员拿到凭空的防守排名)。
+    """
     df = pd.concat([
         _season_row(season=["1970-71"], SPG=[np.nan], BPG=[np.nan]),
         _season_row(season=["1980-81"], player=["B"]),
     ], ignore_index=True)
     out = dimensions.defense_views(df)
-    assert bool(out["SPG_imputed"].iloc[0]) is True
-    assert bool(out["SPG_imputed"].iloc[1]) is False
-    assert out["SPG"].notna().all(), "填充后不应再有缺失"
+    pre = out[out["player"] == "A"]
+    assert pre["SPG"].isna().all() and pre["BPG"].isna().all()
+    assert pre["def_output"].isna().all(), "缺失的防守数据不能变成任何数值"
+    assert pre["defA"].isna().all(), "没有数据就不应该有得分"
+    # 有数据的球员不受影响
+    post = out[out["player"] == "B"]
+    assert post["def_output"].iloc[0] == pytest.approx(1.5 + 0.8)
 
 
 def test_playmaking_marks_playoff_tov_imputed():
@@ -85,12 +94,14 @@ def test_playmaking_marks_playoff_tov_imputed():
     assert out["ast_tov"].notna().all()
 
 
-def test_rebounding_split_imputation_uses_30_70():
+def test_rebounding_does_not_estimate_oreb_dreb_split():
+    """1973-74 之前没有进攻/防守篮板拆分 —— 不许按 30/70 估算"""
     df = _season_row(OREB=[np.nan], DREB=[np.nan], REB=[10.0])
     out = dimensions.rebounding_views(df)
-    assert out["OREB"].iloc[0] == 3.0
-    assert out["DREB"].iloc[0] == 7.0
-    assert bool(out["split_imputed"].iloc[0]) is True
+    assert pd.isna(out["OREB"].iloc[0]) and pd.isna(out["DREB"].iloc[0])
+    # 但总篮板两个视角必须照常算出来 (REB 从 1950-51 起就有)
+    assert out["rebA"].notna().all()
+    assert out["rebC"].notna().all()
 
 
 def test_era_group_uses_median_season_not_data_availability():

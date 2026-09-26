@@ -47,9 +47,13 @@ def summarize(df: pd.DataFrame, prefix: str, agg: AggSpec, views: ViewSpec) -> p
 
 
 def final_rank(view_ranks: list[pd.Series]) -> pd.Series:
-    """两视角名次取中位数后排名。并列只在分数真正相等时出现。"""
+    """两视角名次取中位数后排名。并列只在分数真正相等时出现。
+
+    返回可空整数: 两个视角都没有数据的球员 (如 1973-74 前球员的防守)
+    名次为 NA, 而不是被硬塞一个名次。
+    """
     median = pd.concat(view_ranks, axis=1).median(axis=1)
-    return median.rank(method="min").astype(int)
+    return median.rank(method="min").astype("Int64")
 
 
 def build_dimension(
@@ -100,20 +104,24 @@ def build_dimension(
 
     view_ranks = []
     for view in views:
-        r = career[f"total_{view}"].rank(ascending=False, method="min").astype(int)
-        career[f"total_{view}_rank"] = r
+        r = career[f"total_{view}"].rank(ascending=False, method="min")
+        career[f"total_{view}_rank"] = r.astype("Int64")
         view_ranks.append(r)
 
     career[f"{key}_median"] = pd.concat(view_ranks, axis=1).median(axis=1)
     career[f"{key}_rank"] = final_rank(view_ranks)
-    career[f"{key}_tied"] = career[f"{key}_rank"].duplicated(keep=False)
-    return career.sort_values(f"{key}_rank").reset_index(drop=True)
+    rank = career[f"{key}_rank"]
+    career[f"{key}_tied"] = rank.notna() & rank.duplicated(keep=False)
+    return career.sort_values(f"{key}_rank", na_position="last").reset_index(drop=True)
 
 
 def rank_quality_report(career: pd.DataFrame, key: str) -> str:
-    """名次完整性: 唯一名次数、并列人数、是否存在跳号"""
+    """名次完整性: 唯一名次数、并列人数、无数据人数"""
     r = career[f"{key}_rank"]
-    uniq = r.nunique()
+    ranked = r.dropna()
+    n_na = int(r.isna().sum())
+    uniq = ranked.nunique()
     ties = int(career[f"{key}_tied"].sum())
-    return (f"{key:10s} 名次 1..{r.max():3d}, 唯一值 {uniq:3d}, "
-            f"并列球员 {ties:2d}, n={len(career)}")
+    tail = f", 无数据 {n_na} 人" if n_na else ""
+    return (f"{key:10s} 已排名 {len(ranked):3d} 人 (名次 1..{int(ranked.max()):3d}), "
+            f"唯一值 {uniq:3d}, 并列 {ties:2d}{tail}")

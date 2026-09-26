@@ -99,7 +99,7 @@ def run_playmaking(reg: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
 
 
 def run_defense(reg: pd.DataFrame, po: pd.DataFrame, db: pd.DataFrame) -> pd.DataFrame:
-    print("[防守能力] STL+BLK x 稀缺性 (1973-74 前无数据, 用中位数填充并打标记)")
+    print("[防守能力] STL+BLK x 稀缺性 | 1973-74 前无抢断/盖帽记录: 不填充, 显示 N/A")
     res = engine.build_dimension(
         dimensions.defense_views(reg), po,
         name="defense", key="def",
@@ -107,14 +107,17 @@ def run_defense(reg: pd.DataFrame, po: pd.DataFrame, db: pd.DataFrame) -> pd.Dat
         playoff_mode="experience",
     )
     print(f"    {engine.rank_quality_report(res, 'def')}")
-    # SPG/BPG 缺失是整段生涯缺失 (1973-74 之前), 这类球员的防守名次不可当真
-    missing_spg = reg.groupby("player")["SPG"].apply(lambda s: s.isna().all())
-    res["defense_stats_missing"] = res["player"].map(missing_spg).fillna(False)
-    res["imputed_season_share"] = res["reg_SPG_imputed"].fillna(0)
-    n_imp = int(res["defense_stats_missing"].sum())
-    n_part = int((res["imputed_season_share"].between(0.01, 0.99)).sum())
-    print(f"    抢断/盖帽整段生涯缺失的球员: {n_imp} 人 (1973-74 赛季之前) — 其防守名次是填充值产物")
-    print(f"    部分赛季缺失 (生涯跨越 1973-74): {n_part} 人")
+
+    spg = reg.groupby("player")["SPG"]
+    res["seasons_with_def_data"] = res["player"].map(
+        spg.apply(lambda s: int(s.notna().sum()))).fillna(0).astype(int)
+    res["defense_stats_missing"] = res["seasons_with_def_data"] == 0
+    res["season_coverage"] = res["player"].map(spg.apply(lambda s: s.notna().mean())).fillna(0)
+    n_missing = int(res["defense_stats_missing"].sum())
+    thin = res[res["seasons_with_def_data"].between(1, config.PEAK_YEARS - 1)]
+    print(f"    整段生涯没有抢断/盖帽数据 (1973-74 之前): {n_missing} 人 — 不参与防守排名")
+    print(f"    有数据但不足 {config.PEAK_YEARS} 个赛季 (排名样本很薄, 已标注): {len(thin)} 人 — "
+          f"{', '.join(f'{r.player}({r.seasons_with_def_data}季)' for r in thin.itertuples())}")
 
     r = add_era_z(add_era_columns(reg), ["SPG", "BPG"])
     feats = r.groupby("player").agg({"SPG_era_z": "mean", "BPG_era_z": "mean",
@@ -132,17 +135,20 @@ def run_defense(reg: pd.DataFrame, po: pd.DataFrame, db: pd.DataFrame) -> pd.Dat
     res = res.merge(base[["player", "d_dpm"]], on="player", how="left")
     res = res.merge(pd.DataFrame({"player": base["player"], "def_impact_score": ridge.predictions.values}),
                     on="player", how="left")
-    res["def_impact_rank"] = res["def_impact_score"].rank(ascending=False, method="min").astype(int)
+    # 没有抢断/盖帽数据的人不做预测: 特征全靠中位数填充, 预测值没有意义
+    res.loc[res["defense_stats_missing"], "def_impact_score"] = pd.NA
+    res["def_impact_rank"] = res["def_impact_score"].rank(ascending=False, method="min").astype("Int64")
+
     res = res.rename(columns={"reg_def_output": "reg_def"})   # 展示用名 (与仪表盘一致)
     _write(res[["player", "def_rank", "def_tied", "reg_SPG", "reg_BPG", "reg_def",
-                "po_GP", "defense_stats_missing", "imputed_season_share",
-                "total_A_rank", "total_C_rank",
+                "po_GP", "defense_stats_missing", "seasons_with_def_data",
+                "season_coverage", "total_A_rank", "total_C_rank",
                 "def_impact_rank", "def_impact_score", "d_dpm"]], "defense_ranking.csv")
     return res
 
 
 def run_rebounding(reb: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
-    print("[篮板能力] 总篮板 x 稀缺性 (1973-74 前的 OREB/DREB 拆分按 30/70 估算)")
+    print("[篮板能力] 总篮板 x 稀缺性 | 1973-74 前无 OREB/DREB 拆分: 不估算, 专项榜显示 N/A")
     views = dimensions.rebounding_views(reb)
     res = engine.build_dimension(
         views, po,
@@ -151,20 +157,24 @@ def run_rebounding(reb: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
         playoff_mode="experience",
     )
     print(f"    {engine.rank_quality_report(res, 'reb')}")
-    res["split_imputed_share"] = res["reg_split_imputed"].fillna(0)
-    print(f"    OREB/DREB 拆分为估算值的球员赛季占比: "
-          f"{res['split_imputed_share'].mean() * 100:.0f}% (1973-74 之前)")
+    split = reb.groupby("player")["OREB"]
+    res["rebound_split_missing"] = res["player"].map(
+        split.apply(lambda s: s.isna().all())).fillna(False)
+    n_split = int(res["rebound_split_missing"].sum())
+    print(f"    没有进攻/防守篮板拆分 (1973-74 之前): {n_split} 人 — "
+          f"总篮板照常排名, OREB/DREB 专项榜显示 N/A")
+
     res = res.rename(columns={"reg_REB": "RPG", "reg_OREB": "OREB", "reg_DREB": "DREB"})
     for col in ["OREB", "DREB"]:
-        # 用填充后的 views 计算巅峰值, 否则早期球员的 OREB 全是 NaN 排名会崩
         peak = views.groupby("player")[col].apply(
             lambda s: s.nlargest(config.PEAK_YEARS).mean()).round(2).reset_index()
         peak.columns = ["player", f"peak_{col}"]
         res = res.merge(peak, on="player")
-    res["oreb_rank"] = res["peak_OREB"].rank(ascending=False, method="min").astype(int)
-    res["dreb_rank"] = res["peak_DREB"].rank(ascending=False, method="min").astype(int)
+    # 用可空整数: 缺拆分的球员没有专项名次, 而不是被排到最后一名
+    res["oreb_rank"] = res["peak_OREB"].rank(ascending=False, method="min").astype("Int64")
+    res["dreb_rank"] = res["peak_DREB"].rank(ascending=False, method="min").astype("Int64")
     _write(res[["player", "reb_rank", "reb_tied", "RPG", "OREB", "DREB",
-                "oreb_rank", "dreb_rank", "po_GP", "split_imputed_share",
+                "oreb_rank", "dreb_rank", "po_GP", "rebound_split_missing",
                 "total_A_rank", "total_C_rank"]], "rebounding_ranking.csv")
     return res
 

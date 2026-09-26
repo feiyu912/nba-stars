@@ -70,6 +70,11 @@ def load_dimension(fname: str) -> pd.DataFrame:
 # ── 标题 ──
 st.title("🏀 NBA Player Analysis System")
 st.markdown("**101 players | 1948-2026 | Multi-dimensional, era-adjusted rankings**")
+st.caption(
+    "数据口径: 联盟从 1973-74 赛季才开始记录抢断/盖帽、1977-78 赛季才开始记录失误、"
+    "1973-74 赛季才区分进攻/防守篮板。**缺失处一律显示 N/A，不做估算填充** —— "
+    "用填充值换来的名次是假名次。这些字段缺失的球员会在对应维度被排除，并在该页说明。"
+)
 st.markdown("---")
 
 # ── 侧边栏: 分类导航 ──
@@ -296,37 +301,46 @@ elif view == "Defense Ranking":
     - **Playoff experience bonus**: More playoff games = defense trusted under pressure
     - Two sub-views (per-game + per-minute era-adjusted) combined via median rank
 
-    *Note: STL/BLK data only available from 1973. 11 pre-1973 players use median estimates.*
+    ⚠️ **NBA 直到 1973-74 赛季才开始记录抢断和盖帽。** 在此之前没有防守数据，
+    这里**不做任何估算填充** —— 那会造出一个假名次。相关球员显示为 **N/A** 且不参与排名。
     """)
 
     defense_data = load_dimension("defense_ranking.csv")
-    df = defense_data.sort_values("def_rank").head(top_n).copy()
-    df["Rank"] = df["def_rank"].astype(int)
+    defense_data = defense_data.sort_values("def_rank", na_position="last")
+    df = defense_data.head(top_n).copy()
+    df["Rank"] = df["def_rank"]
+    df["样本季数"] = df["seasons_with_def_data"]
 
-    chart_df = df[["def_rank", "player", "reg_SPG", "reg_BPG", "reg_def"]].copy()
+    chart_df = df[df["def_rank"].notna()][["def_rank", "player", "reg_SPG", "reg_BPG", "reg_def"]].copy()
     chart_df["Rank"] = chart_df["def_rank"].astype(int)
     chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
     chart = alt.Chart(chart_df).mark_bar(color="#e53935").encode(
         x=alt.X("reg_def:Q", title="Career STL+BLK"),
         y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
         tooltip=["player", "Rank", "reg_SPG", "reg_BPG", "reg_def"]
-    ).properties(height=max(top_n * 28, 400))
+    ).properties(height=max(len(chart_df) * 28, 400))
     st.altair_chart(chart, use_container_width=True)
 
-    show_cols = ["Rank", "player", "reg_SPG", "reg_BPG", "reg_def", "po_GP"]
-    st.dataframe(df[show_cols].rename(columns={
+    show_cols = ["Rank", "player", "reg_SPG", "reg_BPG", "reg_def", "样本季数", "po_GP"]
+    table = df[show_cols].rename(columns={
         "player": "Player", "reg_SPG": "SPG", "reg_BPG": "BPG",
         "reg_def": "STL+BLK", "po_GP": "Playoff GP"
-    }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+    })
+    st.dataframe(table.reset_index(drop=True), use_container_width=True,
+                 height=min(len(table) * 38, 900))
 
-    imputed_all = defense_data[defense_data["defense_stats_missing"] == True]["player"].tolist()  # noqa: E712
-    if imputed_all:
-        in_view = sorted(set(imputed_all) & set(df["player"]))
+    no_data = defense_data[defense_data["defense_stats_missing"] == True]["player"].tolist()  # noqa: E712
+    if no_data:
+        st.info(
+            f"**不参与排名的 {len(no_data)} 人**（生涯全部在 1973-74 之前，NBA 当时没有抢断/盖帽统计）："
+            + "、".join(no_data)
+        )
+    thin = defense_data[defense_data["seasons_with_def_data"].between(1, 4)]
+    if len(thin):
         st.warning(
-            f"以下 {len(imputed_all)} 名球员的生涯全部在 1973-74 之前，NBA 当时没有抢断/盖帽统计，"
-            "这里用中位数填充 —— 他们的防守名次由填充值决定，不代表真实防守能力：\n\n"
-            + "、".join(imputed_all)
-            + (f"\n\n其中出现在当前榜单里: {'、'.join(in_view)}" if in_view else "")
+            "**排名样本不足 5 个赛季的球员**（巅峰窗口按 5 年计，这些人的名次来自很小的样本，"
+            "请结合「样本季数」一列判断）：\n\n"
+            + "、".join(f"{r.player}（{int(r.seasons_with_def_data)} 个赛季）" for r in thin.itertuples())
         )
 
 # ════════════════════════════════
@@ -340,7 +354,8 @@ elif view == "Rebounding Ranking":
     - **DRB** = Defensive rebounds (ending opponent possessions)
     - Playoff experience bonus applied
 
-    *Note: OREB/DREB split unavailable pre-1973; estimated as 30/70 for those players.*
+    ⚠️ **NBA 直到 1973-74 赛季才区分进攻/防守篮板。** 总篮板（1950-51 起有记录）
+    照常排名；没有拆分的球员 ORB/DRB 显示为 **N/A**，不估算比例。
     """)
 
     reb_data = load_dimension("rebounding_ranking.csv")
@@ -356,6 +371,14 @@ elif view == "Rebounding Ranking":
         tooltip=["player", "Rank", "RPG", "OREB", "DREB"]
     ).properties(height=max(top_n * 28, 400))
     st.altair_chart(chart, use_container_width=True)
+
+    no_split = reb_data[reb_data["rebound_split_missing"] == True]["player"].tolist()  # noqa: E712
+    if no_split:
+        st.info(
+            f"**没有进攻/防守篮板拆分的 {len(no_split)} 人**（生涯全部在 1973-74 之前）："
+            + "、".join(no_split)
+            + " —— 他们的总篮板名次有效，ORB/DRB 为 N/A。"
+        )
 
     show_cols = ["Rank", "player", "RPG", "OREB", "DREB", "po_GP"]
     st.dataframe(df[show_cols].rename(columns={
@@ -375,7 +398,7 @@ elif view == "Player Lookup":
     with col1:
         st.subheader("📊 Scoring")
         scoring_rk = int(r["scoring_rank"]) if pd.notna(r["scoring_rank"]) else "N/A"
-        st.metric("Rank", f"#{scoring_rk}")
+        st.metric("Rank", f"#{scoring_rk}" if isinstance(scoring_rk, int) else "N/A")
         st.metric("PPG", f"{r['PPG']:.1f}")
         st.metric("TS%", f"{r['TS_pct']:.3f}")
         st.metric("Purity", f"{r['purity']:.1f}%")
@@ -383,7 +406,7 @@ elif view == "Player Lookup":
     with col2:
         st.subheader("⚡ Impact")
         impact_rk = int(r["impact_rank"]) if pd.notna(r["impact_rank"]) else "N/A"
-        st.metric("Rank", f"#{impact_rk}")
+        st.metric("Rank", f"#{impact_rk}" if isinstance(impact_rk, int) else "N/A")
         st.metric("GP", f"{int(r['GP'])}")
         if pd.notna(r.get("po_PPG")):
             delta = r["po_PPG"] - r["PPG"]
@@ -394,16 +417,16 @@ elif view == "Player Lookup":
     with col3:
         st.subheader("🎯 Playmaking")
         play_rk = int(r["play_rank"]) if pd.notna(r["play_rank"]) else "N/A"
-        st.metric("Rank", f"#{play_rk}")
+        st.metric("Rank", f"#{play_rk}" if isinstance(play_rk, int) else "N/A")
         st.metric("APG", f"{r['APG']:.1f}")
         st.metric("AST/TOV", f"{r['ast_tov']:.2f}" if pd.notna(r["ast_tov"]) else "N/A")
 
     with col4:
         st.subheader("🛡️ Def / 🏀 Reb")
         def_rk = int(r["def_rank"]) if pd.notna(r.get("def_rank")) else "N/A"
-        st.metric("Defense Rank", f"#{def_rk}")
+        st.metric("Defense Rank", f"#{def_rk}" if isinstance(def_rk, int) else "N/A")
         reb_rk = int(r["reb_rank"]) if pd.notna(r.get("reb_rank")) else "N/A"
-        st.metric("Rebound Rank", f"#{reb_rk}")
+        st.metric("Rebound Rank", f"#{reb_rk}" if isinstance(reb_rk, int) else "N/A")
         if pd.notna(r.get("reb_RPG")):
             st.metric("RPG", f"{r['reb_RPG']:.1f}")
             st.metric("ORB / DRB", f"{r['reb_OREB']:.1f} / {r['reb_DREB']:.1f}")

@@ -71,19 +71,14 @@ PLAYMAKING_VIEWS = {"A": "playA", "C": "playC"}
 
 
 # ── 防守能力 ──
-def defense_views(df: pd.DataFrame, impute_missing: bool = True) -> pd.DataFrame:
+def defense_views(df: pd.DataFrame) -> pd.DataFrame:
     """产出 = STL + BLK (抢断和盖帽是两种技能, 这里等权)
 
-    1973-74 之前的赛季没有抢断/盖帽记录 (池内 11 名球员受影响)。
-    impute_missing=True 时用池内中位数填充 —— 必须知道: 这些球员的防守名次
-    是"填充值 + 季后赛经验加成"的产物, 不是真实防守表现。
+    1973-74 之前没有抢断/盖帽记录 (池内 11 名球员整段生涯缺失)。
+    **不做任何填充** —— 填充出来的名次是假的名次, 这些球员在防守维度
+    显示 N/A 且不参与排名。缺失就是缺失。
     """
     df = _base(df.copy(), None)
-    df["SPG_imputed"] = df["SPG"].isna()
-    df["BPG_imputed"] = df["BPG"].isna()
-    if impute_missing:
-        df["SPG"] = df["SPG"].fillna(df["SPG"].median())
-        df["BPG"] = df["BPG"].fillna(df["BPG"].median())
     df["def_output"] = df["SPG"] + df["BPG"]
     df["def_adj"] = df["def_output"] * df["pace_adj"]
     df = add_scarcity(df, "def_output")
@@ -93,21 +88,18 @@ def defense_views(df: pd.DataFrame, impute_missing: bool = True) -> pd.DataFrame
 
 
 DEFENSE_AGG = {"SPG": "mean", "BPG": "mean", "def_output": "mean",
-               "GP": "sum", "MIN": "mean", "SPG_imputed": "mean", "BPG_imputed": "mean"}
+               "GP": "sum", "MIN": "mean"}
 DEFENSE_VIEWS = {"A": "defA", "C": "defC"}
 
 
 # ── 篮板能力 ──
-def rebounding_views(df: pd.DataFrame, split_imputed: bool = True) -> pd.DataFrame:
-    """A = 总篮板 × 稀缺性; C = 每分钟篮板 × 竞争强度
+def rebounding_views(df: pd.DataFrame) -> pd.DataFrame:
+    """总篮板两个视角只用 REB (1950-51 起就有记录)。
 
-    1973-74 之前没有 OREB/DREB 拆分, 按 30%/70% 估算并打标记。
+    OREB/DREB 拆分在 1973-74 之前不存在, **不做 30/70 估算** ——
+    那些球员的进攻/防守篮板专项榜显示 N/A, 但总篮板榜照常参与。
     """
     df = _base(df.copy(), None)
-    df["split_imputed"] = df["OREB"].isna() | df["DREB"].isna()
-    if split_imputed:
-        df["OREB"] = df["OREB"].fillna(df["REB"] * 0.3)
-        df["DREB"] = df["DREB"].fillna(df["REB"] * 0.7)
     df["RPG_adj"] = df["REB"] * df["pace_adj"]
     df = add_scarcity(df, "REB")
     df["rebA"] = df["RPG_adj"] * df["scarcity"]
@@ -116,7 +108,7 @@ def rebounding_views(df: pd.DataFrame, split_imputed: bool = True) -> pd.DataFra
 
 
 REBOUNDING_AGG = {"REB": "mean", "OREB": "mean", "DREB": "mean",
-                  "GP": "sum", "MIN": "mean", "split_imputed": "mean"}
+                  "GP": "sum", "MIN": "mean"}
 REBOUNDING_VIEWS = {"A": "rebA", "C": "rebC"}
 
 

@@ -77,15 +77,18 @@ per-minute view; each playoff game counts 3x a regular-season game.
 | Dimension | #1 | #2 | #3 | #4 | #5 |
 |-----------|----|----|----|----|----|
 | Playmaking | John Stockton | Magic Johnson | Chris Paul | Steve Nash | Jason Kidd |
-| Defense | Hakeem Olajuwon | David Robinson | Patrick Ewing / Anthony Davis / Kareem | | |
+| Defense | Hakeem Olajuwon | David Robinson | Kareem Abdul-Jabbar | Anthony Davis | Patrick Ewing |
 | Rebounding | Dennis Rodman | Wilt Chamberlain | Dwight Howard | Bill Russell | Moses Malone |
 
 ### Rank quality
 
 Ranks are competition ranks (`method="min"`): ties are real ties, and the next rank skips.
-Unique rank values per dimension: scoring 85/101, impact 101/101, playmaking 80/101,
-defense 75/101, rebounding 81/101 — the ties come from the median-of-two-views step, which
-collapses players whose two view ranks sum to the same value.
+Ranked players per dimension: scoring 101, impact 101, playmaking 101, **defense 90**,
+rebounding 101. Defense is short of 101 because 11 players have no steals/blocks at all
+(NBA did not record them before 1973-74) — they are excluded rather than imputed.
+Unique rank values: scoring 85, impact 101, playmaking 80, defense 71, rebounding 81 — the
+ties come from the median-of-two-views step, which collapses players whose two view ranks
+sum to the same value.
 
 ## How It Works
 
@@ -154,34 +157,50 @@ without a third source to adjudicate. Playoff diffs outside this dataset's contr
 ESPN-side gaps (e.g. ESPN is missing one 2006 playoff game, so its GP reads 22 where the Heat
 actually played 23; ESPN's `did_not_play` flag is unreliable and is not used).
 
-### Known data gaps (deliberate, not filled silently)
+### Known data gaps — nothing is imputed
+
+**Missing means missing.** Earlier versions filled these gaps with medians or fixed ratios,
+which produced ranks that looked real but were artifacts of the fill. That is now forbidden:
+a player without the data shows **N/A** and is excluded from that dimension's ranking.
 
 | Field | Missing until | Affected | How it's handled |
 |-------|--------------|----------|------------------|
-| MIN | 1951-52 | 8 player-seasons | excluded from per-minute views (no imputation) |
+| MIN | 1951-52 | 8 player-seasons | excluded from per-minute views |
 | REB | 1950-51 | 3 player-seasons | excluded from rebounding views |
-| SPG / BPG | 1973-74 | 11 players' entire careers | median-filled, flagged `defense_stats_missing` |
-| OREB / DREB split | 1973-74 | 22% of player-seasons | estimated 30/70, flagged `split_imputed_share` |
-| TOV | 1977-78 | 19 players' entire careers | AST/TOV shown as N/A, marked `TOV_imputed` |
+| SPG / BPG | 1973-74 | 11 players' entire careers | **N/A, not ranked** in defense (`def_rank` is empty) |
+| SPG / BPG (partial) | 1973-74 | 8 players have 1-4 seasons only | ranked, but flagged with `seasons_with_def_data` |
+| OREB / DREB split | 1973-74 | 11 players' entire careers | total rebounds still ranked; ORB/DRB shown as N/A |
+| TOV | 1977-78 | 19 players' entire careers | AST/TOV shown as N/A; playmaking index flagged `TOV_imputed` |
 | FG3M | 1979-80 | — | treated as 0 (no three-point line existed) |
+
+The dashboard shows these exclusions on each affected view, and the page header carries a
+standing notice about which fields did not exist in which era.
 
 ## Known Limitations
 
-1. **Imputed defense ranks.** The 11 players whose careers ended before 1973-74 have no
-   steals/blocks at all; their defensive ranks are produced by median imputation and should not
-   be read as real defensive ability. The dashboard lists them explicitly.
-2. **Fabricated AST/TOV for pre-1977 seasons.** Turnovers weren't recorded, so 19 players'
-   assist-to-turnover ratios cannot be computed; the playmaking index flags these rows.
-3. **Median-of-ranks creates ties.** Combining two views by median rank discards magnitude
+1. **Early-era players are not comparable to modern ones.** NBA began recording steals and
+   blocks in 1973-74, turnovers in 1977-78, and the offensive/defensive rebound split in
+   1973-74. Players whose careers ended before those dates simply have no data for those
+   dimensions. They are excluded (not imputed) and the dashboard lists them explicitly.
+2. **Thin defensive samples.** 8 players have only 1-4 seasons of steals/blocks data (their
+   careers straddle 1973-74). Their ranks come from a tiny sample and the peak-window rule
+   amplifies it — e.g. Jerry West ranks #20 on **one** season (31 games). The
+   `seasons_with_def_data` column and the dashboard warning exist for exactly this. A
+   minimum-sample rule (e.g. require ≥3 seasons) is an open option.
+3. **Fabricated AST/TOV for pre-1977 seasons.** Turnovers weren't recorded, so 19 players'
+   assist-to-turnover ratios cannot be computed; the playmaking index flags these rows
+   (`TOV_imputed`). Note this is the one place a fixed constant (2.5) is still used as a
+   multiplier input; the alternative is a neutral 1.0 multiplier.
+4. **Median-of-ranks creates ties.** Combining two views by median rank discards magnitude
    information; players whose two view ranks sum to the same value tie. An alternative is to
    average Z-scored view scores — not adopted here to keep results comparable with earlier runs.
-4. **Proxy targets.** O-DPM / D-DPM come from a third party and are themselves estimates.
+5. **Proxy targets.** O-DPM / D-DPM come from a third party and are themselves estimates.
    Cross-validated R² below measures how well box scores reproduce *that metric*, not true impact.
-5. **Z-scores are pool-relative.** Scarcity and era Z-scores compare a player to the other
+6. **Z-scores are pool-relative.** Scarcity and era Z-scores compare a player to the other
    members of this 101-player pool, not to the whole league — the pool skews toward all-time
    greats, which compresses Z values.
-6. **No ABA data.** Julius Erving's and Moses Malone's ABA seasons are not included.
-7. **Pre-2002 playoffs are unverified.** No reachable independent source covers them in this
+7. **No ABA data.** Julius Erving's and Moses Malone's ABA seasons are deliberately excluded.
+8. **Pre-2002 playoffs are unverified.** No reachable independent source covers them in this
    environment (see the network note in the verification scripts).
 
 ## Model validation
@@ -242,6 +261,7 @@ archive/                     # 探索历史 (不参与运行)
 | 2025-26 season incomplete | last 6-8 games missing per active player, playoffs absent entirely | patched from B-R / ESPN |
 | Dead code and duplicated outputs | `scoring_ranking.csv` and `impact_ranking.csv` were byte-identical copies of one 50-column frame | each dimension writes only its own columns; `all_rankings.csv` added |
 | Four copies of the era table / summarise logic | adding a dimension meant copying 220 lines | one engine + per-dimension config |
+| Median-fill / 30-70 ratio for missing stats | 11 pre-1973 players got defense ranks built from fabricated values; Jerry West's real single season then had to compete against them | **no imputation at all** — N/A and excluded from that dimension, flagged in the UI |
 
 ## Future work
 

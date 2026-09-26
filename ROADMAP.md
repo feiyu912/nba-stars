@@ -66,9 +66,17 @@ NBA Player Analysis System
 - [x] 多队赛季三重计算 → 已修, 有契约测试兜底
 - [x] 名次截断造成的假并列 → 已修
 - [x] 2025-26 赛季不完整 → 已用 B-R / ESPN 补齐
+- [x] 早期数据的填充值 → 已全部取消 (防守/篮板不再估算), 缺数据显示 N/A 并排除出该维度
 - [ ] 2002 年前的季后赛缺少独立数据源校验 (本机访问不到 stats.nba.com)
-- [ ] 防守/篮板的缺失值用中位数/比例填充, 尚未做敏感性分析
+- [ ] 样本过薄的名次: 8 名球员只有 1-4 个赛季的防守数据 (Jerry West 靠 1 个赛季排到 #20)
+      —— 可选方案: 要求最少 3 个赛季才参与排名, 目前只是标注
 - [ ] 中位数名次会制造并列 (scoring 85/101 个唯一名次), 可考虑改为 Z-score 均值
+- [ ] 转换型赛季 (1973-74 才引入抢断盖帽) 的球员仍缺一个统一的跨时代口径
+
+## Decisions made
+
+- ABA 赛季不纳入统计 (Julius Erving / Moses Malone 的 ABA 年份不计)
+- 缺失值一律不填充: 填充出来的名次是假名次
 
 ## Bonus Ideas
 - [ ] Offensive style classification (3pt / mid-range / paint / FT-driven)
