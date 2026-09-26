@@ -130,15 +130,26 @@ Era adjustments (`nbastars/era.py`):
 
 | Source | Coverage | Content |
 |--------|----------|---------|
-| NBA.com stats API (`nba_api`) | 1948-2024 | 101 players: regular season + playoffs |
-| Basketball-Reference (via [bball-reference-datasets](https://github.com/sumitrodatta/bball-reference-datasets)) | 2025-26 regular season | patched when the NBA.com snapshot proved incomplete |
-| ESPN (via [hoopR-nba-data](https://github.com/sportsdataverse/hoopR-nba-data)) | 2025-26 playoffs | game-level box scores aggregated to per-game averages |
+| NBA.com stats API | 1948-2026 | 101 players: regular season + playoffs — **single source for everything** |
 | databallr API | 2001-2026 | 56 players: O-DPM / D-DPM targets for the ridge models |
 
-**Data provenance note:** 2025-26 is the only season not sourced from NBA.com. The original
-snapshot was taken in late April 2026 (regular season ~93% complete, playoffs absent), so that
-season's regular season was patched from Basketball-Reference and its playoffs from ESPN.
-This is recorded here because the three sources differ slightly (see Limitations).
+**Data provenance note:** the 2025-26 season was originally patched from Basketball-Reference
+(regular season) and ESPN (playoffs) because the local snapshot had been taken in late April 2026,
+mid-season. A fresh primary-source fetch later confirmed the Basketball-Reference values were
+identical and the ESPN values differed only by 0.1-0.2 minutes on 5 rows; those rows have since
+been replaced with the official values, so **the whole dataset is now single-source**.
+
+### Fetching data on this machine
+
+`stats.nba.com` is only reachable from a page already loaded on `nba.com` — direct requests,
+curl and python all fail (the API requires `Referer` / `x-nba-stats` headers that only a
+browser page context supplies). The working route is:
+
+```bash
+python scripts/browser_collector.py --out /tmp/nba_fetch --port 8899      # 终端 1
+# 打开 https://www.nba.com/stats/players/traditional, 控制台里跑 scripts/browser_fetch_snippet.js
+python scripts/verify_against_nba_api.py --fetch-dir /tmp/nba_fetch      # 校验
+```
 
 ### Verification
 
@@ -151,6 +162,7 @@ python scripts/verify_playoffs_espn.py  --cache /tmp/nba_verify/hoopr  # 季后�
 
 | Check | Scope | Result |
 |-------|-------|--------|
+| **Primary source** (`scripts/verify_against_nba_api.py`) | 1,459 regular + 1,102 playoff player-seasons × 9 fields | **100% identical, 0 differences** |
 | Regular season per-game stats | 1,459 player-seasons × 9 fields | **1,457/1,459 = 99.86%** agree |
 | Multi-team season structure | 41 seasons, TOT row vs team rows | GP sums match exactly, no structural anomalies |
 | Rebounds file | 1,459 player-seasons | agrees with the reference; same 2 early-era diffs |
@@ -215,8 +227,8 @@ standing notice about which fields did not exist in which era.
    members of this 101-player pool, not to the whole league — the pool skews toward all-time
    greats, which compresses Z values.
 7. **No ABA data.** Julius Erving's and Moses Malone's ABA seasons are deliberately excluded.
-8. **Pre-2002 playoffs are unverified.** No reachable independent source covers them in this
-   environment (see the network note in the verification scripts).
+8. **Multi-team seasons take the combined row only.** Per-team splits are dropped, so the data
+   cannot answer "how did he play for team X before the trade" — a deliberate trade-off.
 
 ## Model validation
 
