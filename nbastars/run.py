@@ -1,0 +1,237 @@
+"""按正确顺序跑完所有维度并写出结果文件。
+
+原实现的问题: 06/07/08/09 都隐式依赖 05 先跑过 (它们要读 results/scoring_ranking.csv),
+顺序只存在于作者脑子里, 换个目录或新机器就会失败。
+
+用法:
+  python -m nbastars.run                 # 全部维度
+  python -m nbastars.run --only scoring  # 单个维度
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+
+import pandas as pd
+
+from . import config, data, dimensions, engine
+from .era import add_era_columns, add_era_z, career_era_group
+from .ridge import fit_predict
+
+
+def _write(df: pd.DataFrame, name: str) -> None:
+    config.RESULTS_DIR.mkdir(exist_ok=True)
+    path = config.RESULTS_DIR / name
+    df.to_csv(path, index=False)
+    print(f"    -> {path.relative_to(config.ROOT)}  ({len(df)} 行)")
+
+
+def _playoff_gp(po: pd.DataFrame) -> pd.DataFrame:
+    g = po.groupby("player")["GP"].sum().reset_index()
+    g.columns = ["player", "po_GP"]
+    return g
+
+
+def run_scoring(reg: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
+    print("[得分能力] 双视角 = 场均(罚球折算) x TS+ x 稀缺性 | 每分钟 x 竞争强度")
+    res = engine.build_dimension(
+        dimensions.scoring_views(reg), dimensions.scoring_views(po),
+        name="scoring", key="scoring",
+        agg=dimensions.SCORING_AGG, views=dimensions.SCORING_VIEWS,
+        playoff_mode="weighted",
+    )
+    print(f"    {engine.rank_quality_report(res, 'scoring')}")
+    res["FT_pct_scoring"] = (res["reg_FTM"] / res["reg_PPG"] * 100).round(1)
+    _write(res[["player", "scoring_rank", "scoring_tied", "reg_PPG", "po_PPG",
+                "reg_TS_pct", "po_TS_pct", "reg_GP", "po_GP", "FT_pct_scoring",
+                "total_A_rank", "total_C_rank", "scoring_median"]],
+           "scoring_ranking.csv")
+    return res
+
+
+def run_impact(reg: pd.DataFrame, db: pd.DataFrame) -> pd.DataFrame:
+    print("[进攻影响力] 岭回归预测 O-DPM (代理目标), 特征为时代 Z-score")
+    r = add_era_z(add_era_columns(reg), ["PPG", "TS_pct", "APG"])
+    feats = r.groupby("player").agg({
+        "PPG_era_z": "mean", "APG_era_z": "mean", "TS_pct_era_z": "mean"}).round(4).reset_index()
+    peak = r.groupby("player")["PPG_era_z"].apply(
+        lambda s: s.nlargest(config.PEAK_YEARS).mean()).round(4).reset_index()
+    peak.columns = ["player", "peak_PPG_z"]
+
+    target = db.groupby("player_name").agg({"o_dpm": "mean"}).round(3).reset_index()
+    target.columns = ["player", "o_dpm"]
+
+    base = feats.merge(peak, on="player").merge(target, on="player", how="left")
+    features = ["PPG_era_z", "TS_pct_era_z", "APG_era_z", "peak_PPG_z"]
+    result = fit_predict(base, features, "o_dpm")
+    print(f"    {result.summary('ridge')}")
+    print(f"    系数: {result.coefficients}")
+
+    base["impact_score"] = result.predictions.values
+    base["impact_rank"] = base["impact_score"].rank(ascending=False, method="min").astype(int)
+    base = base.merge(add_era_columns(reg).groupby("player").agg(
+        {"PPG": "mean", "APG": "mean", "TS_pct": "mean"}).round(3).reset_index()
+        .rename(columns={"PPG": "reg_PPG", "APG": "reg_APG", "TS_pct": "reg_TS"}),
+        on="player", how="left")
+    base = base.sort_values("impact_rank").reset_index(drop=True)
+    _write(base[["player", "impact_rank", "impact_score", "o_dpm",
+                 "reg_PPG", "reg_APG", "reg_TS"]], "impact_ranking.csv")
+    return base
+
+
+def run_playmaking(reg: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
+    print("[组织能力] APG x 助失比 x 稀缺性 (1977-78 前的 TOV 为估算值, 已打标记)")
+    res = engine.build_dimension(
+        dimensions.playmaking_views(reg), dimensions.playmaking_views(po),
+        name="playmaking", key="play",
+        agg=dimensions.PLAYMAKING_AGG, views=dimensions.PLAYMAKING_VIEWS,
+        playoff_mode="weighted",
+    )
+    print(f"    {engine.rank_quality_report(res, 'play')}")
+    imp = res["reg_TOV_imputed"].fillna(0)
+    print(f"    助失比基于估算 TOV 的赛季占比: {imp.mean() * 100:.0f}% "
+          f"({int(imp.sum())}/{len(imp)} 行) — 这些球员的名次含估算成分")
+    res["TOV_imputed_share"] = imp
+    _write(res[["player", "play_rank", "play_tied", "reg_APG", "reg_TOV",
+                "reg_ast_tov", "po_APG", "po_GP", "TOV_imputed_share",
+                "total_A_rank", "total_C_rank"]], "playmaking_ranking.csv")
+    return res
+
+
+def run_defense(reg: pd.DataFrame, po: pd.DataFrame, db: pd.DataFrame) -> pd.DataFrame:
+    print("[防守能力] STL+BLK x 稀缺性 (1973-74 前无数据, 用中位数填充并打标记)")
+    res = engine.build_dimension(
+        dimensions.defense_views(reg), po,
+        name="defense", key="def",
+        agg=dimensions.DEFENSE_AGG, views=dimensions.DEFENSE_VIEWS,
+        playoff_mode="experience",
+    )
+    print(f"    {engine.rank_quality_report(res, 'def')}")
+    # SPG/BPG 缺失是整段生涯缺失 (1973-74 之前), 这类球员的防守名次不可当真
+    missing_spg = reg.groupby("player")["SPG"].apply(lambda s: s.isna().all())
+    res["defense_stats_missing"] = res["player"].map(missing_spg).fillna(False)
+    res["imputed_season_share"] = res["reg_SPG_imputed"].fillna(0)
+    n_imp = int(res["defense_stats_missing"].sum())
+    n_part = int((res["imputed_season_share"].between(0.01, 0.99)).sum())
+    print(f"    抢断/盖帽整段生涯缺失的球员: {n_imp} 人 (1973-74 赛季之前) — 其防守名次是填充值产物")
+    print(f"    部分赛季缺失 (生涯跨越 1973-74): {n_part} 人")
+
+    r = add_era_z(add_era_columns(reg), ["SPG", "BPG"])
+    feats = r.groupby("player").agg({"SPG_era_z": "mean", "BPG_era_z": "mean",
+                                    "RPG": "mean"}).round(4).reset_index()
+    peak = r.groupby("player")["SPG_era_z"].apply(
+        lambda s: s.nlargest(config.PEAK_YEARS).mean()).round(4).reset_index()
+    peak.columns = ["player", "peak_SPG_z"]
+    target = db.groupby("player_name").agg({"d_dpm": "mean"}).round(3).reset_index()
+    target.columns = ["player", "d_dpm"]
+    base = feats.merge(peak, on="player").merge(target, on="player", how="left")
+    features = ["SPG_era_z", "BPG_era_z", "RPG", "peak_SPG_z"]
+    ridge = fit_predict(base, features, "d_dpm")
+    print(f"    {ridge.summary('ridge')}")
+
+    res = res.merge(base[["player", "d_dpm"]], on="player", how="left")
+    res = res.merge(pd.DataFrame({"player": base["player"], "def_impact_score": ridge.predictions.values}),
+                    on="player", how="left")
+    res["def_impact_rank"] = res["def_impact_score"].rank(ascending=False, method="min").astype(int)
+    res = res.rename(columns={"reg_def_output": "reg_def"})   # 展示用名 (与仪表盘一致)
+    _write(res[["player", "def_rank", "def_tied", "reg_SPG", "reg_BPG", "reg_def",
+                "po_GP", "defense_stats_missing", "imputed_season_share",
+                "total_A_rank", "total_C_rank",
+                "def_impact_rank", "def_impact_score", "d_dpm"]], "defense_ranking.csv")
+    return res
+
+
+def run_rebounding(reb: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
+    print("[篮板能力] 总篮板 x 稀缺性 (1973-74 前的 OREB/DREB 拆分按 30/70 估算)")
+    views = dimensions.rebounding_views(reb)
+    res = engine.build_dimension(
+        views, po,
+        name="rebounding", key="reb",
+        agg=dimensions.REBOUNDING_AGG, views=dimensions.REBOUNDING_VIEWS,
+        playoff_mode="experience",
+    )
+    print(f"    {engine.rank_quality_report(res, 'reb')}")
+    res["split_imputed_share"] = res["reg_split_imputed"].fillna(0)
+    print(f"    OREB/DREB 拆分为估算值的球员赛季占比: "
+          f"{res['split_imputed_share'].mean() * 100:.0f}% (1973-74 之前)")
+    res = res.rename(columns={"reg_REB": "RPG", "reg_OREB": "OREB", "reg_DREB": "DREB"})
+    for col in ["OREB", "DREB"]:
+        # 用填充后的 views 计算巅峰值, 否则早期球员的 OREB 全是 NaN 排名会崩
+        peak = views.groupby("player")[col].apply(
+            lambda s: s.nlargest(config.PEAK_YEARS).mean()).round(2).reset_index()
+        peak.columns = ["player", f"peak_{col}"]
+        res = res.merge(peak, on="player")
+    res["oreb_rank"] = res["peak_OREB"].rank(ascending=False, method="min").astype(int)
+    res["dreb_rank"] = res["peak_DREB"].rank(ascending=False, method="min").astype(int)
+    _write(res[["player", "reb_rank", "reb_tied", "RPG", "OREB", "DREB",
+                "oreb_rank", "dreb_rank", "po_GP", "split_imputed_share",
+                "total_A_rank", "total_C_rank"]], "rebounding_ranking.csv")
+    return res
+
+
+def run_all(only: set[str] | None = None) -> dict[str, pd.DataFrame]:
+    frames = data.load_all()
+    print("=" * 72)
+    print("数据")
+    print("=" * 72)
+    print(data.coverage_report(frames))
+
+    reg, po, reb, db = frames["reg"], frames["po"], frames["reb"], frames["db"]
+    def want(k: str) -> bool:
+        return only is None or k in only
+    out: dict[str, pd.DataFrame] = {}
+
+    print()
+    print("=" * 72)
+    print("维度排名")
+    print("=" * 72)
+    scoring = run_scoring(reg, po) if want("scoring") else None
+    impact = run_impact(reg, db) if want("impact") else None
+    play = run_playmaking(reg, po) if want("playmaking") else None
+    defense = run_defense(reg, po, db) if want("defense") else None
+    rebounding = run_rebounding(reb, po) if want("rebounding") else None
+
+    if scoring is not None:
+        out["scoring"] = scoring
+    if impact is not None:
+        out["impact"] = impact
+    if play is not None:
+        out["playmaking"] = play
+    if defense is not None:
+        out["defense"] = defense
+    if rebounding is not None:
+        out["rebounding"] = rebounding
+
+    # 汇总表: 一次读全, 避免 app.py 反复 merge 五份文件
+    parts = []
+    for _key, df, col in [("scoring", scoring, "scoring_rank"), ("impact", impact, "impact_rank"),
+                         ("playmaking", play, "play_rank"), ("defense", defense, "def_rank"),
+                         ("rebounding", rebounding, "reb_rank")]:
+        if df is None:
+            continue
+        cols = ["player", col] + (["scoring_tied"] if col == "scoring_rank" else [])
+        parts.append(df[cols])
+    if len(parts) == 5:
+        merged = parts[0]
+        for p in parts[1:]:
+            merged = merged.merge(p, on="player", how="outer")
+        merged["era_group"] = merged["player"].map(
+            reg.groupby("player")["season"].apply(career_era_group))
+        merged["has_advanced_data"] = merged["player"].isin(set(db["player_name"]))
+        _write(merged.sort_values("scoring_rank"), "all_rankings.csv")
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="跑完所有维度并写出结果")
+    ap.add_argument("--only", default=None,
+                    help="只跑指定维度, 逗号分隔: scoring,impact,playmaking,defense,rebounding")
+    args = ap.parse_args()
+    only = set(args.only.split(",")) if args.only else None
+    run_all(only)
+    print("\n完成。查看仪表盘: streamlit run app.py")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

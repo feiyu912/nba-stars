@@ -6,11 +6,13 @@
 3. 得分 vs 影响力 象限图 (散点图)
 4. 季后赛表现 vs 常规赛 (箭头图)
 """
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib
-import numpy as np
 import warnings
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
 warnings.filterwarnings('ignore')
 
 # 字体设置
@@ -72,9 +74,12 @@ top20 = career.sort_values("scoring_rank").head(20).iloc[::-1]  # 反转让#1在
 colors = []
 for _, r in top20.iterrows():
     rk = r["scoring_rank"]
-    if rk <= 3: colors.append(COLORS["gold"])
-    elif rk <= 10: colors.append(COLORS["accent"])
-    else: colors.append("#5c6bc0")
+    if rk <= 3:
+        colors.append(COLORS["gold"])
+    elif rk <= 10:
+        colors.append(COLORS["accent"])
+    else:
+        colors.append("#5c6bc0")
 
 bars = ax1.barh(range(len(top20)), top20["PPG"], color=colors, height=0.7, alpha=0.9)
 

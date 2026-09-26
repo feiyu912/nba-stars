@@ -1,176 +1,258 @@
 # NBA Historical Player Ranking System
 
-101 NBA players across 7 decades. Two independent rankings. All era-adjusted. Let data speak.
+101 NBA players across 8 decades. Five independent, era-adjusted rankings. Let data speak.
 
 ## Quick Start
 
 ```bash
-pip install pandas scikit-learn nba_api requests streamlit altair matplotlib seaborn
-
-# Launch interactive dashboard
-streamlit run app.py
-
-# Run ranking model
-python notebooks/05_consensus_ranking.py
+pip install -r requirements.txt          # 依赖已锁定版本
+python -m nbastars.run                   # 按正确顺序跑完所有维度, 写出 results/
+streamlit run app.py                     # 仪表盘: http://localhost:8501
 ```
 
-## Dashboard
+其他命令 (见 `Makefile`):
 
-`streamlit run app.py` then visit http://localhost:8501
+```bash
+make test        # 27 个测试: 数据契约 + 排名引擎 + 指标构造
+make verify      # 常规赛数据校验 (对照 Basketball-Reference, 需先下载参考数据)
+make lint        # ruff
+```
+
+> 单独跑某个维度: `python -m nbastars.run --only playmaking`
+> 旧的 `notebooks/05..10*.py` 仍可用, 现在只是薄壳 — 计算逻辑全在 `nbastars/` 包里。
+
+## Dashboard
 
 | View | What it shows |
 |------|--------------|
 | **Scoring Ranking** | Pure scoring ability: who puts the ball in the basket best |
-| **Impact Ranking** | Total offensive contribution: scoring + assists + gravity |
-| **Head-to-Head** | Compare the two rankings to classify player types |
+| **Impact Ranking** | Total offensive contribution (ridge regression on O-DPM) |
+| **Playmaking Ranking** | Who creates for others (APG × AST/TOV, era-adjusted) |
+| **Defense Ranking** | STL+BLK based defensive output + D-DPM model |
+| **Rebounding Ranking** | Total / offensive / defensive boards, separately ranked |
 | **Scoring Breakdown** | Where points come from: 2P / 3P / FT structure |
 | **Playoff Performance** | Who steps up in the playoffs vs regular season |
+| **Head-to-Head** | Cross-dimension comparison |
 | **Player Lookup** | Deep dive into any player with ranking explanation |
 
 ## Results
 
-### Scoring Ability (who scores the most, most efficiently)
+### Scoring Ability
 
-| Rank | Player | PPG | Key Factor |
-|:----:|--------|:---:|------------|
-| 1 | Michael Jordan | 29.5 | Dominated a low-scoring era + playoff PPG 34.1 |
-| 2 | Kevin Durant | 27.2 | Elite efficiency (TS% .632) + playoff riser |
-| 3 | LeBron James | 26.7 | Volume + efficiency + 292 playoff games |
-| 4 | Luka Doncic | 29.1 | Highest raw PPG among active, limited playoff sample |
-| 5 | Stephen Curry | 24.5 | Best efficiency (TS% .621) + lowest FT reliance (16%) |
-| 6 | Giannis | 24.7 | Elite per-minute scoring |
-| 7 | George Gervin | 26.2 | Dominated 70s-80s scoring |
-| 7 | Joel Embiid | 27.1 | High PPG but penalized for FT reliance (30%) |
-| 9 | Kobe Bryant | 24.2 | 220 playoff games, scores more in playoffs |
-| 10 | James Harden | 23.8 | High efficiency but FT-dependent (29%) |
+`Scoring Index = PPG (FT discounted 0.7x, pace-adjusted) × TS+ × scarcity`, combined with a
+per-minute view; each playoff game counts 3x a regular-season game.
 
-### Offensive Impact (total contribution including assists and playmaking)
+| Rank | Player | Career PPG | TS% | Playoff PPG | FT share of scoring |
+|:----:|--------|:----------:|:---:|:-----------:|:-------------------:|
+| 1 | Michael Jordan | 29.5 | .559 | 34.1 | 23% |
+| 2 | Kevin Durant | 27.1 | .626 | 28.6 | 23% |
+| 3 | Luka Doncic | 29.3 | .589 | 31.5 | 22% |
+| 4 | LeBron James | 26.7 | .592 | 27.9 | 20% |
+| 5 | Stephen Curry | 24.5 | .621 | 26.2 | 16% |
+| 6 | Giannis Antetokounmpo | 24.7 | .607 | 25.8 | 24% |
+| 7 | George Gervin | 26.2 | .571 | 24.9 | 22% |
+| 8 | Joel Embiid | 27.1 | .608 | 25.5 | 30% |
+| 9 | Shaquille O'Neal | 23.0 | .588 | 22.3 | 21% |
+| 9 | Kobe Bryant | 24.2 | .543 | 24.9 | 25% |
 
-| Rank | Player | PPG | APG | Key Factor |
-|:----:|--------|:---:|:---:|------------|
-| 1 | Oscar Robertson | 25.5 | 9.4 | 1960s scoring + assists dominance (era Z-score) |
-| 2 | Magic Johnson | 19.4 | 10.9 | All-time playmaker |
-| 3 | LeBron James | 26.7 | 7.4 | Elite at both scoring and creating |
-| 4 | Jerry West | 26.7 | 6.7 | Dominated across eras |
-| 5 | Luka Doncic | 29.1 | 8.1 | Modern scoring + playmaking combo |
-| 6 | James Harden | 23.8 | 8.0 | Volume scoring + elite assists |
-| 7 | Nikola Jokic | 22.5 | 7.6 | Best passing big man ever |
-| 8 | Michael Jordan | 29.5 | 5.1 | Scoring dominance lifts overall impact |
-| 9 | Wilt Chamberlain | 30.6 | 4.3 | Historical statistical dominance |
-| 10 | Stephen Curry | 24.5 | 6.2 | Gravity + efficiency revolution |
+### Offensive Impact (ridge regression on O-DPM)
 
-### Player Types (comparing both tables)
+| Rank | Player | Career PPG | Career APG | Actual O-DPM | Predicted |
+|:----:|--------|:----------:|:----------:|:------------:|:---------:|
+| 1 | Oscar Robertson | 25.5 | 9.4 | — | 5.76 |
+| 2 | Magic Johnson | 19.4 | 10.9 | — | 5.02 |
+| 3 | LeBron James | 26.7 | 7.4 | 5.29 | 4.74 |
+| 4 | Jerry West | 26.7 | 6.7 | — | 4.66 |
+| 5 | Luka Doncic | 29.3 | 8.2 | 4.45 | 4.52 |
+| 6 | James Harden | 23.9 | 7.4 | 4.64 | 4.27 |
+| 7 | Nikola Jokic | 22.4 | 7.6 | 3.89 | 4.21 |
+| 8 | Michael Jordan | 29.5 | 5.1 | 3.09 | 4.10 |
+| 9 | Wilt Chamberlain | 30.1 | 4.4 | — | 4.09 |
+| 10 | Stephen Curry | 24.5 | 6.2 | 4.52 | 4.08 |
 
-| Type | Description | Examples |
-|------|-------------|---------|
-| **Balanced** | Both rankings close | Jordan, Curry, LeBron, Doncic |
-| **Pure Scorer** | Scoring >> Impact | Kobe, Carmelo, Shaq, Wilkins, Gervin |
-| **Playmaker** | Impact >> Scoring | Nash, Stockton, Jokic, Magic |
+*"—" = no O-DPM available (the model extrapolates for pre-2001 players).*
 
-## Key Findings
+### Other dimensions (top 5)
 
-1. **Scoring scarcity matters** - Jordan's 29.6 PPG in 1997 (league avg 16.8) is more dominant than Doncic's 30.1 in 2025 (league avg 22.4)
-2. **Playoffs separate the great** - Jordan +4.6, Jokic +5.4 in playoffs; Chamberlain -5.9, Dantley -3.6
-3. **FT reliance varies wildly** - Klay Thompson 91% from field goals vs Dolph Schayes only 64%
-4. **Scoring and impact are different things** - Shaq is #11 scorer but #38 impact; Nash is #77 scorer but #20 impact
-5. **Sensitivity analysis confirms stability** - FT coefficient 0.6-0.8: TOP 10 shifts max 2 positions
+| Dimension | #1 | #2 | #3 | #4 | #5 |
+|-----------|----|----|----|----|----|
+| Playmaking | John Stockton | Magic Johnson | Chris Paul | Steve Nash | Jason Kidd |
+| Defense | Hakeem Olajuwon | David Robinson | Patrick Ewing / Anthony Davis / Kareem | | |
+| Rebounding | Dennis Rodman | Wilt Chamberlain | Dwight Howard | Bill Russell | Moses Malone |
+
+### Rank quality
+
+Ranks are competition ranks (`method="min"`): ties are real ties, and the next rank skips.
+Unique rank values per dimension: scoring 85/101, impact 101/101, playmaking 80/101,
+defense 75/101, rebounding 81/101 — the ties come from the median-of-two-views step, which
+collapses players whose two view ranks sum to the same value.
 
 ## How It Works
 
-### Scoring Ranking
+Every dimension follows the same skeleton (`nbastars/engine.py`):
 
 ```
-Scoring Index = PPG (FT x 0.7) x TS+ (relative efficiency)
-
-Era adjustments applied to each season:
-  Pace:        PPG x (97 / era_pace)
-  Competition: x sqrt(teams / 30)
-  Scarcity:    x (1 + PPG_zscore x 0.1)
-
-Playoff weight: each playoff game = 3x regular season game
-Final = median of two sub-views (per-game + per-minute era-adjusted)
+1. Two views per dimension (bulk vs per-minute), each era-adjusted
+2. Per view: 0.6 × peak-5 seasons + 0.4 × career average
+3. Playoff handling:
+     scoring / playmaking  → mix regular + playoff by weighted games (playoff game = 3x)
+     defense / rebounding  → regular-season stats × playoff experience bonus
+       (SPG/BPG/OREB have no playoff splits, so this is a workaround, not an equivalent)
+4. Each view ranked independently, then median rank → final rank
 ```
 
-### Impact Ranking
+Era adjustments (`nbastars/era.py`):
 
-```
-Ridge regression: era-adjusted Z-scores -> predict O-DPM
-
-Training: 53 modern players with actual O-DPM data
-Features: PPG_z, TS%_z, APG_z, peak_PPG_z (all relative to contemporaries)
-Applied to: all 101 players
-
-Note: O-DPM is a proxy target, not ground truth
-```
-
-### Corrections
-
-| Correction | Method | Effect |
+| Adjustment | Method | Effect |
 |-----------|--------|--------|
-| FT Penalty | FT points x 0.7 | Curry (16% FT) rises, Embiid (30%) drops |
-| Pace | PPG x (97/pace) | 1960s pace=125 discounted, modern ~unchanged |
-| Competition | sqrt(teams/30) | 8-team era = 0.52x, 30-team era = 1.0x |
-| Scarcity | 1 + Z-score x 0.1 | Low-scoring eras (90s-00s) get bonus |
+| Pace | per-game × (97 / era pace) | 1960s (pace≈125) discounted, modern ~unchanged |
+| Competition | × sqrt(teams / 30) | 8-team era = 0.52x, 30-team era = 1.0x |
+| Scarcity | × 1 + (same-year Z-score) × 0.1 | dominating a low-scoring era earns a bonus |
+| Era Z-score | same-year Z-score of PPG / APG / TS% / SPG / BPG | input to the ridge models |
 
 ## Data
 
 | Source | Coverage | Content |
 |--------|----------|---------|
-| NBA API | 1959-2026 | 101 players: 1541 regular + 1091 playoff seasons |
-| databallr API | 2001-2026 | 53 players x 641 seasons, 388 metrics (O-DPM, On-Off, rTS%) |
+| NBA.com stats API (`nba_api`) | 1948-2024 | 101 players: regular season + playoffs |
+| Basketball-Reference (via [bball-reference-datasets](https://github.com/sumitrodatta/bball-reference-datasets)) | 2025-26 regular season | patched when the NBA.com snapshot proved incomplete |
+| ESPN (via [hoopR-nba-data](https://github.com/sportsdataverse/hoopR-nba-data)) | 2025-26 playoffs | game-level box scores aggregated to per-game averages |
+| databallr API | 2001-2026 | 56 players: O-DPM / D-DPM targets for the ridge models |
 
-## Player Pool
+**Data provenance note:** 2025-26 is the only season not sourced from NBA.com. The original
+snapshot was taken in late April 2026 (regular season ~93% complete, playoffs absent), so that
+season's regular season was patched from Basketball-Reference and its playoffs from ESPN.
+This is recorded here because the three sources differ slightly (see Limitations).
 
-**NBA 75th Anniversary Team** (76 players) + **25 additional** (Jokic, Embiid, SGA, Tatum, Edwards, Booker, Morant, Mitchell, Irving, Butler, Doncic, T-Mac, Yao, Dwight, Vince Carter, PG13, Klay, Tony Parker, Pau Gasol, Bosh, Draymond, Ginobili, English, Bernard King, Dantley)
+### Verification
 
-## Project Structure
+Two independent cross-checks against sources that are *not* NBA.com:
 
-```
-nba-stars/
-├── app.py                          # Streamlit Dashboard (6 views)
-├── data/
-│   ├── nba100_career_all.csv       # Regular season (NBA API)
-│   ├── nba100_playoffs.csv         # Playoffs (NBA API)
-│   ├── nba100_databallr.csv        # Advanced metrics (databallr)
-│   └── nba100_ids.json             # Player ID mapping
-├── notebooks/
-│   ├── 05_consensus_ranking.py     # Main model: scoring + impact
-│   ├── 06_scoring_breakdown.py     # Structure analysis + DPM comparison
-│   └── 07_visualization.py         # Static charts
-├── results/
-│   ├── scoring_ranking.csv         # Scoring ability ranking
-│   ├── impact_ranking.csv          # Offensive impact ranking
-│   └── scoring_analysis.png        # Charts
-├── fetch_databallr_100.py          # Data fetching scripts
-├── fetch_finals.py
-└── archive/                        # Exploration history
+```bash
+python scripts/verify_reference_data.py --ref-dir /tmp/nba_verify   # 常规赛 vs Basketball-Reference
+python scripts/verify_playoffs_espn.py  --cache /tmp/nba_verify/hoopr  # 季后赛 vs ESPN
 ```
 
-## Methodology Evolution
+| Check | Scope | Result |
+|-------|-------|--------|
+| Regular season per-game stats | 1,459 player-seasons × 9 fields | **1,457/1,459 = 99.86%** agree |
+| Multi-team season structure | 41 seasons, TOT row vs team rows | GP sums match exactly, no structural anomalies |
+| Rebounds file | 1,459 player-seasons | agrees with the reference; same 2 early-era diffs |
+| Playoffs | 468 player-seasons (2002+) | 0 field mismatches attributable to this dataset |
 
-1. Manual weights -> too subjective
-2. Ridge on O-DPM -> assists over-weighted
-3. Ridge on PtsCreated -> same problem
+The 3 remaining regular-season differences are **known NBA.com ↔ Basketball-Reference
+disagreements in early data**, not ingestion bugs:
+
+| Player | Season | Field | NBA.com | B-R |
+|--------|--------|-------|---------|-----|
+| Bill Sharman | 1950-51 | RPG | 3.1 | 3.5 |
+| Bill Sharman | 1950-51 | FGA | 11.6 | 12.3 |
+| Jerry West | 1963-64 | RPG | 6.2 | 6.0 |
+
+They are left as-is: changing them would make two seasons inconsistent with the primary source
+without a third source to adjudicate. Playoff diffs outside this dataset's control are all
+ESPN-side gaps (e.g. ESPN is missing one 2006 playoff game, so its GP reads 22 where the Heat
+actually played 23; ESPN's `did_not_play` flag is unreliable and is not used).
+
+### Known data gaps (deliberate, not filled silently)
+
+| Field | Missing until | Affected | How it's handled |
+|-------|--------------|----------|------------------|
+| MIN | 1951-52 | 8 player-seasons | excluded from per-minute views (no imputation) |
+| REB | 1950-51 | 3 player-seasons | excluded from rebounding views |
+| SPG / BPG | 1973-74 | 11 players' entire careers | median-filled, flagged `defense_stats_missing` |
+| OREB / DREB split | 1973-74 | 22% of player-seasons | estimated 30/70, flagged `split_imputed_share` |
+| TOV | 1977-78 | 19 players' entire careers | AST/TOV shown as N/A, marked `TOV_imputed` |
+| FG3M | 1979-80 | — | treated as 0 (no three-point line existed) |
+
+## Known Limitations
+
+1. **Imputed defense ranks.** The 11 players whose careers ended before 1973-74 have no
+   steals/blocks at all; their defensive ranks are produced by median imputation and should not
+   be read as real defensive ability. The dashboard lists them explicitly.
+2. **Fabricated AST/TOV for pre-1977 seasons.** Turnovers weren't recorded, so 19 players'
+   assist-to-turnover ratios cannot be computed; the playmaking index flags these rows.
+3. **Median-of-ranks creates ties.** Combining two views by median rank discards magnitude
+   information; players whose two view ranks sum to the same value tie. An alternative is to
+   average Z-scored view scores — not adopted here to keep results comparable with earlier runs.
+4. **Proxy targets.** O-DPM / D-DPM come from a third party and are themselves estimates.
+   Cross-validated R² below measures how well box scores reproduce *that metric*, not true impact.
+5. **Z-scores are pool-relative.** Scarcity and era Z-scores compare a player to the other
+   members of this 101-player pool, not to the whole league — the pool skews toward all-time
+   greats, which compresses Z values.
+6. **No ABA data.** Julius Erving's and Moses Malone's ABA seasons are not included.
+7. **Pre-2002 playoffs are unverified.** No reachable independent source covers them in this
+   environment (see the network note in the verification scripts).
+
+## Model validation
+
+Ridge models now report out-of-sample metrics (5-fold CV, scaler fit on training folds only):
+
+| Model | Train rows | In-sample R² | CV R² | CV Spearman |
+|-------|-----------|--------------|-------|-------------|
+| Offensive impact → O-DPM | 53 | 0.472 | 0.416 | 0.687 |
+| Defensive impact → D-DPM | 53 | 0.522 | 0.359 | 0.667 |
+
+The previous README quoted `r=0.555`; that was an in-sample correlation. The cross-validated
+Spearman of 0.687 is the number to cite.
+
+## Project structure
+
+```
+nbastars/                    # 计算核心 (唯一实现处)
+├── config.py                # 时代基准表、权重、阈值、路径
+├── data.py                  # 加载 + 数据契约校验 (重复赛季/GP>82 直接报错)
+├── era.py                   # pace / 竞争强度 / 稀缺性 / 时代 Z-score
+├── engine.py                # 排名引擎: 双视角 → 巅峰+生涯 → 季后赛 → 中位数名次
+├── dimensions.py            # 五个维度的指标构造
+├── ridge.py                 # 岭回归 + 交叉验证
+└── run.py                   # 按正确顺序跑完并写出 results/
+
+scripts/
+├── verify_reference_data.py # 常规赛校验 (对照 Basketball-Reference)
+├── verify_playoffs_espn.py  # 季后赛校验 + 当季补齐数据源 (对照 ESPN)
+└── repair_dataset.py        # 数据修复: 多队赛季去重 + 当季补齐
+
+notebooks/                   # 薄壳: 跑维度 + 打印分析报告
+tests/                       # 27 个测试 (数据契约 / 引擎 / 指标构造)
+data/                        # 原始数据 + 101 人 ID 映射
+results/                     # 各维度排名 + all_rankings.csv (仪表盘读这一份)
+app.py                       # Streamlit 仪表盘
+archive/                     # 探索历史 (不参与运行)
+```
+
+## Methodology evolution
+
+1. Manual weights → too subjective
+2. Ridge on O-DPM → assists over-weighted
+3. Ridge on PtsCreated → same problem
 4. **Solution: separate scoring and impact into independent rankings**
-5. Added: FT penalty, pace/competition/scarcity correction, playoff weighting
-6. Validated: sensitivity analysis (stable), DPM comparison (r=0.555, explainable)
-7. Era Z-score adjustment applied to both rankings
+5. Added FT discount, pace/competition/scarcity correction, playoff weighting
+6. Split playmaking / defense / rebounding into their own dimensions
+7. **Data correctness pass** (see below) + out-of-sample validation + shared engine
 
-## Quality Assurance
+### Fixed in the correctness pass
 
-- **Sensitivity Analysis**: FT coefficient 0.6-0.8, TOP 10 max shift = 2 positions
-- **Explanation Layer**: Every TOP 20 player has factor-by-factor breakdown
-- **DPM Comparison**: r=0.555 correlation with professional metric, differences explainable
-- **Known Limitations**: O-DPM is proxy; modern players have richer data; FT 0.7 has subjective element
+| Issue | Impact | Fix |
+|-------|--------|-----|
+| Multi-team seasons stored as 3 rows (team A + team B + TOT) | 30 players / 41 seasons triple-counted: peak-5 window double-counted, GP summed past 82, era Z-score cohorts polluted | keep only the TOT row (`scripts/repair_dataset.py`), now enforced by a data contract test |
+| `rank().astype(int)` truncated half-ranks | 101 players collapsed to 76-82 unique ranks — fake ties | rank the untruncated median (`engine.final_rank`) |
+| `era_group` derived from data availability | Michael Jordan labelled "Modern (2001+)" | labelled by median career season; availability moved to its own flag |
+| Scaler fit on all rows before the train split | leakage into standardisation | fit on training folds only |
+| 2025-26 season incomplete | last 6-8 games missing per active player, playoffs absent entirely | patched from B-R / ESPN |
+| Dead code and duplicated outputs | `scoring_ranking.csv` and `impact_ranking.csv` were byte-identical copies of one 50-column frame | each dimension writes only its own columns; `all_rankings.csv` added |
+| Four copies of the era table / summarise logic | adding a dimension meant copying 220 lines | one engine + per-dimension config |
 
-## Future Work
+## Future work
 
 | Dimension | Status |
 |-----------|--------|
-| Defense | D-DPM data ready, not yet modeled |
-| Legacy / Awards | MVP, championships, All-NBA - not started |
-| Composite GOAT Ranking | Multi-dimension aggregate - not started |
+| Defense (full) | STL/BLK proxy in place; D-DPM model exists; no all-defense team data |
+| Legacy / Awards | `fetch_finals.py` exists but is **not wired in** and its round-detection is only valid from 1968 |
+| Composite GOAT ranking | Not started — deliberately last |
+| League-wide Z-scores | Requires league-level data instead of the 101-player pool |
+| More independent sources | Pre-2002 playoff verification is still missing |
 
-## Tech Stack
+## Tech stack
 
-Python 3.12 | pandas | scikit-learn | nba_api | Streamlit | Altair | Matplotlib
+Python 3.10+ | pandas 3 | scikit-learn | scipy | Streamlit | Altair | nba_api | pytest | ruff

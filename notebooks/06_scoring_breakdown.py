@@ -5,8 +5,10 @@
 2. 得分方式雷达: 产量/效率/季后赛/投篮纯度
 3. 与 O-DPM 对标: 我们的排名 vs 专业指标
 """
-import pandas as pd
 import warnings
+
+import pandas as pd
+
 warnings.filterwarnings('ignore')
 
 # ── 加载 ──
@@ -102,13 +104,13 @@ print("""
 career["purity"] = (100 - career["pct_FT"]).round(1)
 career = career.sort_values("purity", ascending=False)
 
-print(f"\n最纯(投篮为主):")
+print("\n最纯(投篮为主):")
 for _, r in career.head(10).iterrows():
     rk = int(r["scoring_rank"]) if pd.notna(r["scoring_rank"]) else 0
     print(f"  #{rk:3d} {r['player']:28s}  纯度={r['purity']:.1f}%  "
           f"(2P:{r['pct_2P']:.0f}% 3P:{r['pct_3P']:.0f}% FT:{r['pct_FT']:.0f}%)")
 
-print(f"\n最不纯(罚球依赖):")
+print("\n最不纯(罚球依赖):")
 for _, r in career.tail(10).iterrows():
     rk = int(r["scoring_rank"]) if pd.notna(r["scoring_rank"]) else 0
     print(f"  #{rk:3d} {r['player']:28s}  纯度={r['purity']:.1f}%  "
@@ -135,7 +137,7 @@ perf = perf.merge(scoring[["player", "scoring_rank"]], on="player", how="left")
 perf["delta"] = (perf["po_PPG"] - perf["reg_PPG"]).round(2)
 perf["delta_pct"] = ((perf["delta"] / perf["reg_PPG"]) * 100).round(1)
 
-print(f"\n季后赛得分上升最多 (大赛型):")
+print("\n季后赛得分上升最多 (大赛型):")
 clutch = perf[perf["po_GP"] > 50].sort_values("delta", ascending=False)
 for _, r in clutch.head(10).iterrows():
     rk = int(r["scoring_rank"]) if pd.notna(r["scoring_rank"]) else 0
@@ -143,7 +145,7 @@ for _, r in clutch.head(10).iterrows():
           f"常规={r['reg_PPG']:5.1f} → 季后={r['po_PPG']:5.1f}  "
           f"({r['delta']:+.1f}, {r['delta_pct']:+.1f}%)")
 
-print(f"\n季后赛得分下降最多 (50+场):")
+print("\n季后赛得分下降最多 (50+场):")
 for _, r in clutch.tail(10).iterrows():
     rk = int(r["scoring_rank"]) if pd.notna(r["scoring_rank"]) else 0
     print(f"  #{rk:3d} {r['player']:28s}  "
@@ -196,7 +198,7 @@ for _, r in compare.head(30).iterrows():
     print(f"  {r['player']:28s} #{int(r['scoring_rank']):3d}  #{int(r['odpm_rank']):3d}  "
           f"{d:+4d}   {note}")
 
-print(f"\n差异最大的球员 (我们看重得分, O-DPM看重整体影响):")
+print("\n差异最大的球员 (我们看重得分, O-DPM看重整体影响):")
 for _, r in compare.nlargest(5, "diff").iterrows():
     print(f"  {r['player']:28s}  我们#{int(r['scoring_rank']):3d} vs O-DPM#{int(r['odpm_rank']):3d}  "
           f"→ 纯得分手, 影响力被O-DPM低估")

@@ -1,22 +1,30 @@
 """
 NBA Player Analysis Dashboard
+
+运行: streamlit run app.py
+数据来源见 README "数据" 一节 (2025-26 赛季的常规赛来自 Basketball-Reference,
+季后赛来自 ESPN; 其余赛季来自 NBA.com 官方接口)
 """
-import streamlit as st
-import pandas as pd
+from pathlib import Path
+
 import altair as alt
+import pandas as pd
+import streamlit as st
+
+ROOT = Path(__file__).resolve().parent
+DATA_DIR = ROOT / "data"
+RESULTS_DIR = ROOT / "results"
 
 st.set_page_config(page_title="NBA Player Analysis", layout="wide", page_icon="🏀")
 
 # ── 加载数据 ──
 @st.cache_data
 def load_data():
-    reg = pd.read_csv("data/nba100_career_all.csv")
-    po = pd.read_csv("data/nba100_playoffs.csv")
-    scoring = pd.read_csv("results/scoring_ranking.csv")
-    impact = pd.read_csv("results/impact_ranking.csv")
-    playmaking = pd.read_csv("results/playmaking_ranking.csv")
-    defense = pd.read_csv("results/defense_ranking.csv")
-    rebounding = pd.read_csv("results/rebounding_ranking.csv")
+    reg = pd.read_csv(DATA_DIR / "nba100_career_all.csv")
+    po = pd.read_csv(DATA_DIR / "nba100_playoffs.csv")
+    ranks = pd.read_csv(RESULTS_DIR / "all_rankings.csv")      # 五个维度的名次一次读全
+    defense = pd.read_csv(RESULTS_DIR / "defense_ranking.csv")
+    rebounding = pd.read_csv(RESULTS_DIR / "rebounding_ranking.csv")
 
     career = reg.groupby("player").agg({
         "PPG": "mean", "FGM": "mean", "FG3M": "mean",
@@ -34,19 +42,19 @@ def load_data():
     career["pct_3P"] = (career["pts_3P"] / career["pts_total"] * 100).round(1)
     career["pct_FT"] = (career["pts_FT"] / career["pts_total"] * 100).round(1)
     career["purity"] = (100 - career["pct_FT"]).round(1)
-    career["TOV"] = career["TOV"].fillna(2.5)
-    career["ast_tov"] = (career["APG"] / career["TOV"].replace(0, 0.5)).round(2)
+    # 助失比只在有失误记录时才算。1977-78 之前没有 TOV, 用常数 2.5 伪造会
+    # 让早期球员的助失比全部等于 APG/2.5, 是个假指标, 所以这里保留缺失。
+    career["ast_tov"] = (career["APG"] / career["TOV"]).round(2)
 
     po_avg = po.groupby("player").agg({"PPG": "mean", "APG": "mean", "GP": "sum"}).round(2).reset_index()
     po_avg.columns = ["player", "po_PPG", "po_APG", "po_GP"]
     career = career.merge(po_avg, on="player", how="left")
     career["po_delta"] = (career["po_PPG"] - career["PPG"]).round(2)
 
-    career = career.merge(scoring[["player", "scoring_rank"]], on="player", how="left")
-    career = career.merge(impact[["player", "impact_rank"]], on="player", how="left")
-    career = career.merge(playmaking[["player", "play_rank"]], on="player", how="left")
-    career = career.merge(defense[["player", "def_rank"]], on="player", how="left")
-    career = career.merge(rebounding[["player", "reb_rank", "RPG", "OREB", "DREB"]].rename(
+    career = career.merge(ranks, on="player", how="left")
+    career = career.merge(defense[["player", "def_rank", "defense_stats_missing"]],
+                          on="player", how="left")
+    career = career.merge(rebounding[["player", "RPG", "OREB", "DREB"]].rename(
         columns={"RPG": "reb_RPG", "OREB": "reb_OREB", "DREB": "reb_DREB"}
     ), on="player", how="left")
 
@@ -54,9 +62,14 @@ def load_data():
 
 career = load_data()
 
+@st.cache_data
+def load_dimension(fname: str) -> pd.DataFrame:
+    """单个维度的明细表 (含图表要用的列), 走缓存避免每次交互重读磁盘"""
+    return pd.read_csv(RESULTS_DIR / fname)
+
 # ── 标题 ──
 st.title("🏀 NBA Player Analysis System")
-st.markdown("**101 players | 1959-2026 | Multi-dimensional, era-adjusted rankings**")
+st.markdown("**101 players | 1948-2026 | Multi-dimensional, era-adjusted rankings**")
 st.markdown("---")
 
 # ── 侧边栏: 分类导航 ──
@@ -286,7 +299,7 @@ elif view == "Defense Ranking":
     *Note: STL/BLK data only available from 1973. 11 pre-1973 players use median estimates.*
     """)
 
-    defense_data = pd.read_csv("results/defense_ranking.csv")
+    defense_data = load_dimension("defense_ranking.csv")
     df = defense_data.sort_values("def_rank").head(top_n).copy()
     df["Rank"] = df["def_rank"].astype(int)
 
@@ -306,6 +319,16 @@ elif view == "Defense Ranking":
         "reg_def": "STL+BLK", "po_GP": "Playoff GP"
     }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
 
+    imputed_all = defense_data[defense_data["defense_stats_missing"] == True]["player"].tolist()  # noqa: E712
+    if imputed_all:
+        in_view = sorted(set(imputed_all) & set(df["player"]))
+        st.warning(
+            f"以下 {len(imputed_all)} 名球员的生涯全部在 1973-74 之前，NBA 当时没有抢断/盖帽统计，"
+            "这里用中位数填充 —— 他们的防守名次由填充值决定，不代表真实防守能力：\n\n"
+            + "、".join(imputed_all)
+            + (f"\n\n其中出现在当前榜单里: {'、'.join(in_view)}" if in_view else "")
+        )
+
 # ════════════════════════════════
 elif view == "Rebounding Ranking":
     st.header("🏀 Rebounding Ability")
@@ -320,7 +343,7 @@ elif view == "Rebounding Ranking":
     *Note: OREB/DREB split unavailable pre-1973; estimated as 30/70 for those players.*
     """)
 
-    reb_data = pd.read_csv("results/rebounding_ranking.csv")
+    reb_data = load_dimension("rebounding_ranking.csv")
     df = reb_data.sort_values("reb_rank").head(top_n).copy()
     df["Rank"] = df["reb_rank"].astype(int)
 
@@ -373,7 +396,7 @@ elif view == "Player Lookup":
         play_rk = int(r["play_rank"]) if pd.notna(r["play_rank"]) else "N/A"
         st.metric("Rank", f"#{play_rk}")
         st.metric("APG", f"{r['APG']:.1f}")
-        st.metric("AST/TOV", f"{r['ast_tov']:.1f}")
+        st.metric("AST/TOV", f"{r['ast_tov']:.2f}" if pd.notna(r["ast_tov"]) else "N/A")
 
     with col4:
         st.subheader("🛡️ Def / 🏀 Reb")
@@ -396,23 +419,38 @@ elif view == "Player Lookup":
     # 解释
     st.subheader("Analysis")
     factors = []
-    if r["PPG"] > 25: factors.append(f"✅ High volume scorer (PPG={r['PPG']:.1f})")
-    elif r["PPG"] > 20: factors.append(f"✅ Solid scorer (PPG={r['PPG']:.1f})")
-    else: factors.append(f"⚠️ Lower scoring volume (PPG={r['PPG']:.1f})")
+    if r["PPG"] > 25:
+        factors.append(f"✅ High volume scorer (PPG={r['PPG']:.1f})")
+    elif r["PPG"] > 20:
+        factors.append(f"✅ Solid scorer (PPG={r['PPG']:.1f})")
+    else:
+        factors.append(f"⚠️ Lower scoring volume (PPG={r['PPG']:.1f})")
 
-    if r["TS_pct"] > 0.58: factors.append(f"✅ Elite efficiency (TS%={r['TS_pct']:.3f})")
-    elif r["TS_pct"] > 0.54: factors.append(f"✅ Good efficiency (TS%={r['TS_pct']:.3f})")
-    else: factors.append(f"⚠️ Below-average efficiency (TS%={r['TS_pct']:.3f})")
+    if r["TS_pct"] > 0.58:
+        factors.append(f"✅ Elite efficiency (TS%={r['TS_pct']:.3f})")
+    elif r["TS_pct"] > 0.54:
+        factors.append(f"✅ Good efficiency (TS%={r['TS_pct']:.3f})")
+    else:
+        factors.append(f"⚠️ Below-average efficiency (TS%={r['TS_pct']:.3f})")
 
-    if r["pct_FT"] > 28: factors.append(f"⚠️ Heavy FT reliance ({r['pct_FT']:.1f}%)")
-    elif r["pct_FT"] < 18: factors.append(f"✅ Low FT reliance ({r['pct_FT']:.1f}%)")
+    if r["pct_FT"] > 28:
+        factors.append(f"⚠️ Heavy FT reliance ({r['pct_FT']:.1f}%)")
+    elif r["pct_FT"] < 18:
+        factors.append(f"✅ Low FT reliance ({r['pct_FT']:.1f}%)")
 
-    if r["APG"] > 7: factors.append(f"✅ Elite playmaker (APG={r['APG']:.1f})")
-    elif r["APG"] > 4: factors.append(f"✅ Good playmaker (APG={r['APG']:.1f})")
-    else: factors.append(f"⚠️ Limited playmaking (APG={r['APG']:.1f})")
+    if r["APG"] > 7:
+        factors.append(f"✅ Elite playmaker (APG={r['APG']:.1f})")
+    elif r["APG"] > 4:
+        factors.append(f"✅ Good playmaker (APG={r['APG']:.1f})")
+    else:
+        factors.append(f"⚠️ Limited playmaking (APG={r['APG']:.1f})")
 
-    if r["ast_tov"] > 2.5: factors.append(f"✅ Excellent decision-making (AST/TOV={r['ast_tov']:.1f})")
-    elif r["ast_tov"] < 1.5: factors.append(f"⚠️ Turnover-prone (AST/TOV={r['ast_tov']:.1f})")
+    if pd.isna(r["ast_tov"]):
+        factors.append("➖ 无失误记录 (1977-78 起才有该统计), 助失比不参与判断")
+    elif r["ast_tov"] > 2.5:
+        factors.append(f"✅ Excellent decision-making (AST/TOV={r['ast_tov']:.2f})")
+    elif r["ast_tov"] < 1.5:
+        factors.append(f"⚠️ Turnover-prone (AST/TOV={r['ast_tov']:.2f})")
 
     if pd.notna(r.get("po_PPG")) and r["po_GP"] > 50:
         if r["po_PPG"] > r["PPG"]:
@@ -428,5 +466,6 @@ elif view == "Player Lookup":
 # ── Footer ──
 st.markdown("---")
 st.markdown("""
-*Data: NBA API (1959-2026) + databallr.com (2001-2026) | 101 players | All era-adjusted*
+*常规赛: NBA.com 官方接口 (1948-2024) + Basketball-Reference (2025-26) | 季后赛: NBA.com + ESPN (2025-26)*
+*101 名球员 | 时代修正: pace / 竞争强度 / 稀缺性 | 多队赛季只计合并数据 | 数据校验见 scripts/verify_*.py*
 """)
