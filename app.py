@@ -1,10 +1,14 @@
 """
-NBA Player Analysis Dashboard
+NBA Player Analysis Dashboard — English / 中文
 
 运行: streamlit run app.py
-数据来源见 README "数据" 一节 (2025-26 赛季的常规赛来自 Basketball-Reference,
-季后赛来自 ESPN; 其余赛季来自 NBA.com 官方接口)
+
+界面文案全部走 nbastars/i18n.py。选定语言后界面不再出现另一种语言的文字,
+例外只有两类 (都不属于"文案"): 语言切换控件本身、以及统计缩写与球员姓名。
 """
+from __future__ import annotations
+
+import sys
 from pathlib import Path
 
 import altair as alt
@@ -12,483 +16,393 @@ import pandas as pd
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from nbastars.dashboard_data import build_career_frame  # noqa: E402
+from nbastars.dashboard_data import load_dimension as load_dimension_csv  # noqa: E402
+from nbastars.i18n import LANGS, t  # noqa: E402
+
 DATA_DIR = ROOT / "data"
 RESULTS_DIR = ROOT / "results"
 
 st.set_page_config(page_title="NBA Player Analysis", layout="wide", page_icon="🏀")
 
-# ── 加载数据 ──
+
 @st.cache_data
-def load_data():
-    reg = pd.read_csv(DATA_DIR / "nba100_career_all.csv")
-    po = pd.read_csv(DATA_DIR / "nba100_playoffs.csv")
-    ranks = pd.read_csv(RESULTS_DIR / "all_rankings.csv")      # 五个维度的名次一次读全
-    defense = pd.read_csv(RESULTS_DIR / "defense_ranking.csv")
-    rebounding = pd.read_csv(RESULTS_DIR / "rebounding_ranking.csv")
+def load_data() -> pd.DataFrame:
+    return build_career_frame(DATA_DIR, RESULTS_DIR)
 
-    career = reg.groupby("player").agg({
-        "PPG": "mean", "FGM": "mean", "FG3M": "mean",
-        "FTM": "mean", "TS_pct": "mean", "GP": "sum",
-        "APG": "mean", "MIN": "mean",
-        "TOV": "mean",
-    }).round(3).reset_index()
-    career["FG3M"] = career["FG3M"].fillna(0)
-    career["FG2M"] = career["FGM"] - career["FG3M"]
-    career["pts_2P"] = career["FG2M"] * 2
-    career["pts_3P"] = career["FG3M"] * 3
-    career["pts_FT"] = career["FTM"]
-    career["pts_total"] = career["pts_2P"] + career["pts_3P"] + career["pts_FT"]
-    career["pct_2P"] = (career["pts_2P"] / career["pts_total"] * 100).round(1)
-    career["pct_3P"] = (career["pts_3P"] / career["pts_total"] * 100).round(1)
-    career["pct_FT"] = (career["pts_FT"] / career["pts_total"] * 100).round(1)
-    career["purity"] = (100 - career["pct_FT"]).round(1)
-    # 助失比只在有失误记录时才算。1977-78 之前没有 TOV, 用常数 2.5 伪造会
-    # 让早期球员的助失比全部等于 APG/2.5, 是个假指标, 所以这里保留缺失。
-    career["ast_tov"] = (career["APG"] / career["TOV"]).round(2)
-
-    po_avg = po.groupby("player").agg({"PPG": "mean", "APG": "mean", "GP": "sum"}).round(2).reset_index()
-    po_avg.columns = ["player", "po_PPG", "po_APG", "po_GP"]
-    career = career.merge(po_avg, on="player", how="left")
-    career["po_delta"] = (career["po_PPG"] - career["PPG"]).round(2)
-
-    career = career.merge(ranks, on="player", how="left")
-    career = career.merge(defense[["player", "def_rank", "defense_stats_missing"]],
-                          on="player", how="left")
-    career = career.merge(rebounding[["player", "RPG", "OREB", "DREB"]].rename(
-        columns={"RPG": "reb_RPG", "OREB": "reb_OREB", "DREB": "reb_DREB"}
-    ), on="player", how="left")
-
-    return career
-
-career = load_data()
 
 @st.cache_data
 def load_dimension(fname: str) -> pd.DataFrame:
     """单个维度的明细表 (含图表要用的列), 走缓存避免每次交互重读磁盘"""
-    return pd.read_csv(RESULTS_DIR / fname)
+    return load_dimension_csv(RESULTS_DIR, fname)
+
+
+career = load_data()
+
+
+def fmt_rank(value) -> str:
+    return f"#{int(value)}" if pd.notna(value) else t(lang, "na")
+
+
+def keep_columns(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """丢掉整列都是空的列 (空列在表里显示成一片空白)"""
+    return df[[c for c in cols if df[c].notna().any()]]
+
+
+# ── 语言选择 (必须先于一切文案) ──
+# 语言切换控件本身用双语标注 —— 这是切换器固有的性质, 不算"混用"
+lang = st.sidebar.radio("**Language / 语言**", options=list(LANGS),
+                        format_func=lambda k: LANGS[k], horizontal=True)
 
 # ── 标题 ──
-st.title("🏀 NBA Player Analysis System")
-st.markdown("**101 players | 1948-2026 | Multi-dimensional, era-adjusted rankings**")
-st.caption(
-    "数据口径: 联盟从 1973-74 赛季才开始记录抢断/盖帽、1977-78 赛季才开始记录失误、"
-    "1973-74 赛季才区分进攻/防守篮板。**缺失处一律显示 N/A，不做估算填充** —— "
-    "用填充值换来的名次是假名次。这些字段缺失的球员会在对应维度被排除，并在该页说明。"
-)
+st.title(t(lang, "app_title"))
+st.markdown(t(lang, "app_subtitle"))
+st.caption(t(lang, "app_data_note"))
 st.markdown("---")
 
-# ── 侧边栏: 分类导航 ──
-category = st.sidebar.selectbox("Category", [
-    "🏀 Offense",
-    "🛡️ Defense",
-    "📊 Rebounding",
-    "🔎 Player Lookup",
-])
+# ── 侧边栏导航 (用稳定的 key, 不依赖翻译后的文字) ──
+category = st.sidebar.selectbox(
+    t(lang, "sidebar_category"),
+    options=["offense", "defense", "rebounding", "lookup"],
+    format_func=lambda k: t(lang, f"cat_{k}"),
+)
 
-if category == "🏀 Offense":
-    view = st.sidebar.radio("View", [
-        "Scoring Ranking",
-        "Impact Ranking",
-        "Playmaking Ranking",
-        "Scoring Breakdown",
-        "Playoff Performance",
-        "Head-to-Head",
-    ])
-elif category == "🛡️ Defense":
-    view = "Defense Ranking"
-elif category == "📊 Rebounding":
-    view = "Rebounding Ranking"
+if category == "offense":
+    view = st.sidebar.radio(
+        t(lang, "sidebar_view"),
+        options=["scoring", "impact", "playmaking", "breakdown", "playoff", "h2h"],
+        format_func=lambda k: t(lang, f"view_{k}"),
+    )
 else:
-    view = "Player Lookup"
+    view = category
 
 st.sidebar.markdown("---")
-top_n = st.sidebar.slider("Show top N players", 10, 101, 25)
+top_n = st.sidebar.slider(t(lang, "sidebar_top_n"), 10, 101, 25)
 
 # ════════════════════════════════
-if view == "Scoring Ranking":
-    st.header("📊 Scoring Ability")
-    st.markdown("""
-    **Who puts the ball in the basket best?**
-
-    - **Scoring Index** = PPG (FT discounted 0.7x) x TS+ (relative efficiency)
-    - **Playoff weight**: Each playoff game = 3x regular season
-    - **Era adjustment**: Pace + competition intensity + scoring scarcity Z-score
-    - **Two sub-views** (per-game + per-minute era-adjusted) combined via median rank
-
-    *Assists and playmaking are NOT included — see Playmaking Ranking for that.*
-    """)
+if view == "scoring":
+    st.header(t(lang, "scoring_header"))
+    st.markdown(t(lang, "scoring_intro"))
 
     df = career.sort_values("scoring_rank").head(top_n).copy()
-    df["Rank"] = df["scoring_rank"].astype(int)
-    df = df.rename(columns={"player": "Player", "PPG": "PPG", "TS_pct": "TS%",
-                              "pct_FT": "FT%ofScoring", "purity": "Purity%"})
-
-    chart_df = df[["Rank", "Player", "PPG", "TS%"]].copy()
-    chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['Player']}", axis=1)
+    df["rank_disp"] = df["scoring_rank"].astype(int)
+    chart_df = df[["rank_disp", "player", "PPG", "TS_pct"]].copy()
+    chart_df["label"] = chart_df.apply(lambda r: f"#{int(r['rank_disp'])} {r['player']}", axis=1)
     chart = alt.Chart(chart_df).mark_bar(color="#00bcd4").encode(
-        x=alt.X("PPG:Q", title="Career PPG"),
-        y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
-        tooltip=["Player", "Rank", "PPG", "TS%"]
+        x=alt.X("PPG:Q", title=t(lang, "col_ppg")),
+        y=alt.Y("label:N", sort=alt.EncodingSortField(field="rank_disp", order="ascending"), title=""),
+        tooltip=[alt.Tooltip("player:N", title=t(lang, "col_player")),
+                 alt.Tooltip("rank_disp:Q", title=t(lang, "col_rank")),
+                 alt.Tooltip("PPG:Q", title=t(lang, "col_ppg")),
+                 alt.Tooltip("TS_pct:Q", title=t(lang, "col_ts"))]
     ).properties(height=max(top_n * 28, 400))
     st.altair_chart(chart, use_container_width=True)
 
-    show_cols = ["Rank", "Player", "PPG", "TS%", "FT%ofScoring", "Purity%", "GP"]
-    st.dataframe(df[show_cols].reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+    table = df[["rank_disp", "player", "PPG", "TS_pct", "pct_FT", "purity", "GP"]].rename(columns={
+        "rank_disp": t(lang, "col_rank"), "player": t(lang, "col_player"),
+        "PPG": t(lang, "col_ppg"), "TS_pct": t(lang, "col_ts"),
+        "pct_FT": t(lang, "col_ft_share"), "purity": t(lang, "col_purity"),
+        "GP": t(lang, "col_gp"),
+    })
+    st.dataframe(table.reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
-elif view == "Impact Ranking":
-    st.header("⚡ Offensive Impact")
-    st.markdown("""
-    **Who contributes the most to team offense overall?**
-
-    Includes scoring + assists + gravity + playmaking — the full picture.
-
-    - Ridge regression trained on **O-DPM** (proxy target) with **era-adjusted Z-scores**
-    - A player's stats are compared to their contemporaries, not raw values
-    - 10 APG in the 1960s (rare) gets more credit than 10 APG today (more common)
-
-    *Note: O-DPM is a proxy target, not ground truth.*
-    """)
+elif view == "impact":
+    st.header(t(lang, "impact_header"))
+    st.markdown(t(lang, "impact_intro"))
 
     df = career.sort_values("impact_rank").head(top_n).copy()
-    df["Rank"] = df["impact_rank"].astype(int)
-
-    chart_df = df[["impact_rank", "player", "PPG", "APG"]].copy()
-    chart_df["Rank"] = chart_df["impact_rank"].astype(int)
-    chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
+    df["rank_disp"] = df["impact_rank"].astype(int)
+    chart_df = df[["rank_disp", "player", "PPG", "APG"]].copy()
+    chart_df["label"] = chart_df.apply(lambda r: f"#{int(r['rank_disp'])} {r['player']}", axis=1)
     chart = alt.Chart(chart_df).mark_bar(color="#ff9800").encode(
-        x=alt.X("PPG:Q", title="Career PPG"),
-        y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
-        tooltip=["player", "Rank", "PPG", "APG"]
+        x=alt.X("PPG:Q", title=t(lang, "col_ppg")),
+        y=alt.Y("label:N", sort=alt.EncodingSortField(field="rank_disp", order="ascending"), title=""),
+        tooltip=[alt.Tooltip("player:N", title=t(lang, "col_player")),
+                 alt.Tooltip("rank_disp:Q", title=t(lang, "col_rank")),
+                 alt.Tooltip("PPG:Q", title=t(lang, "col_ppg")),
+                 alt.Tooltip("APG:Q", title=t(lang, "col_apg"))]
     ).properties(height=max(top_n * 28, 400))
     st.altair_chart(chart, use_container_width=True)
 
-    show_cols = ["Rank", "player", "PPG", "APG", "TS_pct", "GP"]
-    st.dataframe(df[show_cols].rename(columns={"player": "Player", "TS_pct": "TS%"}).reset_index(drop=True),
-                 use_container_width=True, height=min(top_n * 38, 900))
+    table = df[["rank_disp", "player", "PPG", "APG", "TS_pct", "GP"]].rename(columns={
+        "rank_disp": t(lang, "col_rank"), "player": t(lang, "col_player"),
+        "PPG": t(lang, "col_ppg"), "APG": t(lang, "col_apg"),
+        "TS_pct": t(lang, "col_ts"), "GP": t(lang, "col_gp"),
+    })
+    st.dataframe(table.reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
-elif view == "Playmaking Ranking":
-    st.header("🎯 Playmaking Ability")
-    st.markdown("""
-    **Who creates the most scoring opportunities for others?**
-
-    Completely independent from Scoring — this measures what you create for teammates.
-
-    - **Playmaking Index** = APG (pace-adjusted) x Assist-to-Turnover ratio x Scarcity
-    - **Era-adjusted**: Averaging 10 APG in 1962 (only Oscar did it) counts more than 10 APG in 2025
-    - **Playoff 3x weight**: Playmaking under pressure matters more
-    - **AST/TOV**: Creating without wasting — John Stockton (3.7) vs Westbrook (2.0)
-
-    *Scoring ability is NOT included — see Scoring Ranking for that.*
-    """)
+elif view == "playmaking":
+    st.header(t(lang, "play_header"))
+    st.markdown(t(lang, "play_intro"))
 
     df = career.sort_values("play_rank").head(top_n).copy()
-    df["Rank"] = df["play_rank"].astype(int)
-
-    chart_df = df[["play_rank", "player", "APG", "ast_tov"]].copy()
-    chart_df["Rank"] = chart_df["play_rank"].astype(int)
-    chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
+    df["rank_disp"] = df["play_rank"].astype(int)
+    chart_df = df[["rank_disp", "player", "APG", "ast_tov"]].copy()
+    chart_df["label"] = chart_df.apply(lambda r: f"#{int(r['rank_disp'])} {r['player']}", axis=1)
     chart = alt.Chart(chart_df).mark_bar(color="#4caf50").encode(
-        x=alt.X("APG:Q", title="Career APG"),
-        y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
-        tooltip=["player", "Rank", "APG", "ast_tov"]
+        x=alt.X("APG:Q", title=t(lang, "col_apg")),
+        y=alt.Y("label:N", sort=alt.EncodingSortField(field="rank_disp", order="ascending"), title=""),
+        tooltip=[alt.Tooltip("player:N", title=t(lang, "col_player")),
+                 alt.Tooltip("rank_disp:Q", title=t(lang, "col_rank")),
+                 alt.Tooltip("APG:Q", title=t(lang, "col_apg")),
+                 alt.Tooltip("ast_tov:Q", title=t(lang, "lk_ast_tov"))]
     ).properties(height=max(top_n * 28, 400))
     st.altair_chart(chart, use_container_width=True)
 
-    show_cols = ["Rank", "player", "APG", "ast_tov", "GP"]
-    st.dataframe(df[show_cols].rename(columns={
-        "player": "Player", "ast_tov": "AST/TOV"
-    }).reset_index(drop=True),
-        use_container_width=True, height=min(top_n * 38, 900))
+    table = df[["rank_disp", "player", "APG", "ast_tov", "GP"]].rename(columns={
+        "rank_disp": t(lang, "col_rank"), "player": t(lang, "col_player"),
+        "APG": t(lang, "col_apg"), "ast_tov": t(lang, "lk_ast_tov"),
+        "GP": t(lang, "col_gp"),
+    })
+    st.dataframe(table.reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
-elif view == "Scoring Breakdown":
-    st.header("🔍 Scoring Structure")
-    st.markdown("""
-    **Where do the points come from?**
-
-    - 🔵 **2-Point** (mid-range, drives, post-ups) | 🟠 **3-Point** (perimeter) | ⬜ **Free throws**
-    - **Purity** = % from field goals. High purity = real shooting skill, not foul-drawing.
-    - Players with high FT% are penalized in Scoring Ranking (FT x 0.7).
-    """)
+elif view == "breakdown":
+    st.header(t(lang, "bd_header"))
+    st.markdown(t(lang, "bd_intro"))
 
     df = career.sort_values("scoring_rank").head(top_n).copy()
     chart_df = df[["player", "pct_2P", "pct_3P", "pct_FT"]].set_index("player")
-    chart_df.columns = ["2-Point %", "3-Point %", "Free Throw %"]
+    chart_df.columns = [t(lang, "bd_2p"), t(lang, "bd_3p"), t(lang, "bd_ft")]
     st.bar_chart(chart_df, stack=True, color=["#2196F3", "#FF9800", "#9E9E9E"])
 
+    cols = {"player": t(lang, "col_player"), "PPG": t(lang, "col_ppg"),
+            "purity": t(lang, "col_purity"), "pct_2P": t(lang, "bd_2p"),
+            "pct_3P": t(lang, "bd_3p"), "pct_FT": t(lang, "bd_ft")}
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("🏆 Highest Purity (Shot-makers)")
+        st.subheader(t(lang, "bd_top_purity"))
         pure = career.sort_values("purity", ascending=False).head(10)
-        st.dataframe(pure[["player", "PPG", "purity", "pct_2P", "pct_3P", "pct_FT"]].rename(
-            columns={"player": "Player", "purity": "Purity%", "pct_2P": "2P%",
-                     "pct_3P": "3P%", "pct_FT": "FT%"}).reset_index(drop=True),
-            use_container_width=True)
+        st.dataframe(pure[list(cols)].rename(columns=cols).reset_index(drop=True),
+                     use_container_width=True)
     with col2:
-        st.subheader("⚠️ Most FT-Dependent")
+        st.subheader(t(lang, "bd_top_ft"))
         impure = career.sort_values("purity").head(10)
-        st.dataframe(impure[["player", "PPG", "purity", "pct_2P", "pct_3P", "pct_FT"]].rename(
-            columns={"player": "Player", "purity": "Purity%", "pct_2P": "2P%",
-                     "pct_3P": "3P%", "pct_FT": "FT%"}).reset_index(drop=True),
-            use_container_width=True)
+        st.dataframe(impure[list(cols)].rename(columns=cols).reset_index(drop=True),
+                     use_container_width=True)
 
 # ════════════════════════════════
-elif view == "Playoff Performance":
-    st.header("🔥 Playoff Performance")
-    st.markdown("""
-    **The biggest stage separates the great from the good.**
+elif view == "playoff":
+    st.header(t(lang, "po_header"))
+    st.markdown(t(lang, "po_intro"))
 
-    Playoff PPG vs regular season PPG (minimum 30 playoff games).
-    Playoff games are weighted 3x in all rankings.
-    """)
-
-    df = career[career["po_GP"] > 30].copy()
-    df = df.sort_values("po_delta", ascending=False)
+    df = career[career["po_GP"] > 30].copy().sort_values("po_delta", ascending=False)
+    cols = {"player": t(lang, "col_player"), "PPG": t(lang, "po_col_reg"),
+            "po_PPG": t(lang, "po_col_po"), "po_delta": t(lang, "po_col_change"),
+            "po_GP": t(lang, "po_col_games")}
 
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("📈 Biggest Risers")
-        risers = df.head(15)[["player", "PPG", "po_PPG", "po_delta", "po_GP"]].copy()
-        risers.columns = ["Player", "Reg PPG", "PO PPG", "Change", "PO Games"]
-        st.dataframe(risers.reset_index(drop=True), use_container_width=True)
+        st.subheader(t(lang, "po_risers"))
+        st.dataframe(df.head(15)[list(cols)].rename(columns=cols).reset_index(drop=True),
+                     use_container_width=True)
     with col2:
-        st.subheader("📉 Biggest Drops")
-        drops = df.tail(15).sort_values("po_delta")[["player", "PPG", "po_PPG", "po_delta", "po_GP"]].copy()
-        drops.columns = ["Player", "Reg PPG", "PO PPG", "Change", "PO Games"]
-        st.dataframe(drops.reset_index(drop=True), use_container_width=True)
+        st.subheader(t(lang, "po_drops"))
+        drops = df.tail(15).sort_values("po_delta")
+        st.dataframe(drops[list(cols)].rename(columns=cols).reset_index(drop=True),
+                     use_container_width=True)
 
-    chart_df = df.head(20).set_index("player")[["po_delta"]].rename(columns={"po_delta": "PPG Change"})
+    chart_df = df.head(20).set_index("player")[["po_delta"]]
+    chart_df.columns = [t(lang, "po_chart")]
     st.bar_chart(chart_df, color="#ffd700")
 
 # ════════════════════════════════
-elif view == "Head-to-Head":
-    st.header("🔄 Cross-Ranking Comparison")
-    st.markdown("""
-    **Compare all three offensive dimensions side by side.**
+elif view == "h2h":
+    st.header(t(lang, "h2h_header"))
+    st.markdown(t(lang, "h2h_intro"))
 
-    - **All-around offensive star**: High in all three
-    - **Pure Scorer**: Scoring high, Playmaking low
-    - **Pure Playmaker**: Playmaking high, Scoring low
-    - **Score + Create**: Top 15 in both Scoring and Playmaking
-    """)
-
-    df = career.copy()
-    df = df[df["scoring_rank"].notna() & df["play_rank"].notna()]
-
-    compare = df[["player", "scoring_rank", "impact_rank", "play_rank", "def_rank", "reb_rank", "PPG", "APG"]].copy()
-    for c in ["scoring_rank", "impact_rank", "play_rank"]:
-        compare[c] = compare[c].astype(int)
-    for c in ["def_rank", "reb_rank"]:
-        compare[c] = compare[c].fillna(0).astype(int)
-    compare = compare.sort_values("scoring_rank").head(top_n)
-
-    st.dataframe(compare.rename(columns={
-        "player": "Player", "scoring_rank": "Scoring",
-        "impact_rank": "Impact", "play_rank": "Playmaking",
-        "def_rank": "Defense", "reb_rank": "Rebound"
-    }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+    df = career[career["scoring_rank"].notna() & career["play_rank"].notna()].copy()
+    compare = df[["player", "scoring_rank", "impact_rank", "play_rank",
+                  "def_rank", "reb_rank", "PPG", "APG"]].sort_values("scoring_rank").head(top_n)
+    # 无数据 / 样本不足的维度保持空白, 不能填 0 (会被读成"第 0 名")
+    cols = {"player": t(lang, "col_player"), "scoring_rank": t(lang, "view_scoring"),
+            "impact_rank": t(lang, "view_impact"), "play_rank": t(lang, "view_playmaking"),
+            "def_rank": t(lang, "view_defense"), "reb_rank": t(lang, "view_rebounding"),
+            "PPG": t(lang, "col_ppg"), "APG": t(lang, "col_apg")}
+    st.dataframe(compare.rename(columns=cols).reset_index(drop=True),
+                 use_container_width=True, height=min(top_n * 38, 900))
 
 # ════════════════════════════════
-elif view == "Defense Ranking":
-    st.header("🛡️ Defensive Ability")
-    st.markdown("""
-    **Who is the best defender in NBA history?**
+elif view == "defense":
+    st.header(t(lang, "def_header"))
+    st.markdown(t(lang, "def_intro"))
 
-    - **Defense Output** = STL + BLK (steals + blocks), pace-adjusted
-    - **Era scarcity**: Dominating defensively in a low-steal/block era gets extra credit
-    - **Playoff experience bonus**: More playoff games = defense trusted under pressure
-    - Two sub-views (per-game + per-minute era-adjusted) combined via median rank
-
-    ⚠️ **NBA 直到 1973-74 赛季才开始记录抢断和盖帽。** 在此之前没有防守数据，
-    这里**不做任何估算填充** —— 那会造出一个假名次。相关球员显示为 **N/A** 且不参与排名。
-    """)
-
-    defense_data = load_dimension("defense_ranking.csv")
-    defense_data = defense_data.sort_values("def_rank", na_position="last")
+    defense_data = load_dimension("defense_ranking.csv").sort_values("def_rank", na_position="last")
     df = defense_data.head(top_n).copy()
-    df["Rank"] = df["def_rank"]
-    df["样本季数"] = df["seasons_with_def_data"]
 
     chart_df = df[df["def_rank"].notna()][["def_rank", "player", "reg_SPG", "reg_BPG", "reg_def"]].copy()
-    chart_df["Rank"] = chart_df["def_rank"].astype(int)
-    chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
+    chart_df["rank_int"] = chart_df["def_rank"].astype(int)
+    chart_df["label"] = chart_df.apply(lambda r: f"#{int(r['rank_int'])} {r['player']}", axis=1)
     chart = alt.Chart(chart_df).mark_bar(color="#e53935").encode(
-        x=alt.X("reg_def:Q", title="Career STL+BLK"),
-        y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
-        tooltip=["player", "Rank", "reg_SPG", "reg_BPG", "reg_def"]
+        x=alt.X("reg_def:Q", title=t(lang, "def_chart_x")),
+        y=alt.Y("label:N", sort=alt.EncodingSortField(field="rank_int", order="ascending"), title=""),
+        tooltip=[alt.Tooltip("player:N", title=t(lang, "col_player")),
+                 alt.Tooltip("rank_int:Q", title=t(lang, "col_rank")),
+                 alt.Tooltip("reg_SPG:Q", title=t(lang, "col_stl")),
+                 alt.Tooltip("reg_BPG:Q", title=t(lang, "col_blk")),
+                 alt.Tooltip("reg_def:Q", title=t(lang, "col_stl_blk"))]
     ).properties(height=max(len(chart_df) * 28, 400))
     st.altair_chart(chart, use_container_width=True)
 
-    show_cols = ["Rank", "player", "reg_SPG", "reg_BPG", "reg_def", "样本季数", "po_GP"]
-    table = df[show_cols].rename(columns={
-        "player": "Player", "reg_SPG": "SPG", "reg_BPG": "BPG",
-        "reg_def": "STL+BLK", "po_GP": "Playoff GP"
+    table = df[["def_rank", "player", "reg_SPG", "reg_BPG", "reg_def",
+                "seasons_with_def_data", "po_GP"]].rename(columns={
+        "def_rank": t(lang, "col_rank"), "player": t(lang, "col_player"),
+        "reg_SPG": t(lang, "col_stl"), "reg_BPG": t(lang, "col_blk"),
+        "reg_def": t(lang, "col_stl_blk"), "seasons_with_def_data": t(lang, "col_sample"),
+        "po_GP": t(lang, "col_playoff_gp"),
     })
     st.dataframe(table.reset_index(drop=True), use_container_width=True,
                  height=min(len(table) * 38, 900))
 
     no_data = defense_data[defense_data["defense_stats_missing"] == True]["player"].tolist()  # noqa: E712
     if no_data:
-        st.info(
-            f"**不参与排名的 {len(no_data)} 人**（生涯全部在 1973-74 之前，NBA 当时没有抢断/盖帽统计）："
-            + "、".join(no_data)
-        )
-    thin = defense_data[defense_data["seasons_with_def_data"].between(1, 4)]
+        st.info(t(lang, "def_excluded_title", n=len(no_data)) + " "
+                + t(lang, "def_excluded_body", names=t(lang, "name_sep").join(no_data)))
+    thin = defense_data[defense_data["sample_too_small"] == True]  # noqa: E712
     if len(thin):
-        st.warning(
-            "**排名样本不足 5 个赛季的球员**（巅峰窗口按 5 年计，这些人的名次来自很小的样本，"
-            "请结合「样本季数」一列判断）：\n\n"
-            + "、".join(f"{r.player}（{int(r.seasons_with_def_data)} 个赛季）" for r in thin.itertuples())
-        )
+        sep = t(lang, "name_sep")
+        names = sep.join(f"{r.player} ({int(r.seasons_with_def_data)})" for r in thin.itertuples())
+        st.warning(t(lang, "def_thin_title", n=len(thin)) + " "
+                   + t(lang, "def_thin_body", peak=5, names=names))
 
 # ════════════════════════════════
-elif view == "Rebounding Ranking":
-    st.header("🏀 Rebounding Ability")
-    st.markdown("""
-    **Who controls the boards?**
+elif view == "rebounding":
+    st.header(t(lang, "reb_header"))
+    st.markdown(t(lang, "reb_intro"))
 
-    - **Total RPG** (pace-adjusted) with era scarcity bonus
-    - **ORB** = Offensive rebounds (creating second chances)
-    - **DRB** = Defensive rebounds (ending opponent possessions)
-    - Playoff experience bonus applied
+    reb_data = load_dimension("rebounding_ranking.csv").sort_values("reb_rank")
+    df = reb_data.head(top_n).copy()
+    df["rank_disp"] = df["reb_rank"].astype(int)
 
-    ⚠️ **NBA 直到 1973-74 赛季才区分进攻/防守篮板。** 总篮板（1950-51 起有记录）
-    照常排名；没有拆分的球员 ORB/DRB 显示为 **N/A**，不估算比例。
-    """)
-
-    reb_data = load_dimension("rebounding_ranking.csv")
-    df = reb_data.sort_values("reb_rank").head(top_n).copy()
-    df["Rank"] = df["reb_rank"].astype(int)
-
-    chart_df = df[["reb_rank", "player", "RPG", "OREB", "DREB"]].copy()
-    chart_df["Rank"] = chart_df["reb_rank"].astype(int)
-    chart_df["Label"] = chart_df.apply(lambda r: f"#{int(r['Rank'])} {r['player']}", axis=1)
+    chart_df = df[["rank_disp", "player", "RPG", "OREB", "DREB"]].copy()
+    chart_df["label"] = chart_df.apply(lambda r: f"#{int(r['rank_disp'])} {r['player']}", axis=1)
     chart = alt.Chart(chart_df).mark_bar(color="#9c27b0").encode(
-        x=alt.X("RPG:Q", title="Career RPG"),
-        y=alt.Y("Label:N", sort=alt.EncodingSortField(field="Rank", order="ascending"), title=""),
-        tooltip=["player", "Rank", "RPG", "OREB", "DREB"]
+        x=alt.X("RPG:Q", title=t(lang, "reb_chart_x")),
+        y=alt.Y("label:N", sort=alt.EncodingSortField(field="rank_disp", order="ascending"), title=""),
+        tooltip=[alt.Tooltip("player:N", title=t(lang, "col_player")),
+                 alt.Tooltip("rank_disp:Q", title=t(lang, "col_rank")),
+                 alt.Tooltip("RPG:Q", title=t(lang, "col_rpg")),
+                 alt.Tooltip("OREB:Q", title=t(lang, "col_orb")),
+                 alt.Tooltip("DREB:Q", title=t(lang, "col_drb"))]
     ).properties(height=max(top_n * 28, 400))
     st.altair_chart(chart, use_container_width=True)
 
+    show = keep_columns(df, ["rank_disp", "player", "RPG", "OREB", "DREB", "po_GP"])
+    table = show.rename(columns={
+        "rank_disp": t(lang, "col_rank"), "player": t(lang, "col_player"),
+        "RPG": t(lang, "col_rpg"), "OREB": t(lang, "col_orb"), "DREB": t(lang, "col_drb"),
+        "po_GP": t(lang, "col_playoff_gp"),
+    })
+    st.dataframe(table.reset_index(drop=True), use_container_width=True,
+                 height=min(len(table) * 38, 900))
+
     no_split = reb_data[reb_data["rebound_split_missing"] == True]["player"].tolist()  # noqa: E712
     if no_split:
-        st.info(
-            f"**没有进攻/防守篮板拆分的 {len(no_split)} 人**（生涯全部在 1973-74 之前）："
-            + "、".join(no_split)
-            + " —— 他们的总篮板名次有效，ORB/DRB 为 N/A。"
-        )
-
-    show_cols = ["Rank", "player", "RPG", "OREB", "DREB", "po_GP"]
-    st.dataframe(df[show_cols].rename(columns={
-        "player": "Player", "po_GP": "Playoff GP"
-    }).reset_index(drop=True), use_container_width=True, height=min(top_n * 38, 900))
+        st.info(t(lang, "reb_excluded_title", n=len(no_split)) + " "
+                + t(lang, "reb_excluded_body", names=t(lang, "name_sep").join(no_split)))
 
 # ════════════════════════════════
-elif view == "Player Lookup":
-    st.header("🔎 Player Lookup")
-    st.markdown("**Complete player profile across all dimensions.**")
+elif view == "lookup":
+    st.header(t(lang, "lk_header"))
+    st.markdown(t(lang, "lk_intro"))
 
-    player = st.selectbox("Select player", sorted(career["player"].unique()))
+    player = st.selectbox(t(lang, "lk_select"), sorted(career["player"].unique()))
     r = career[career["player"] == player].iloc[0]
 
-    # 排名卡片
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.subheader("📊 Scoring")
-        scoring_rk = int(r["scoring_rank"]) if pd.notna(r["scoring_rank"]) else "N/A"
-        st.metric("Rank", f"#{scoring_rk}" if isinstance(scoring_rk, int) else "N/A")
-        st.metric("PPG", f"{r['PPG']:.1f}")
-        st.metric("TS%", f"{r['TS_pct']:.3f}")
-        st.metric("Purity", f"{r['purity']:.1f}%")
+        st.subheader(t(lang, "lk_scoring"))
+        st.metric(t(lang, "lk_rank"), fmt_rank(r["scoring_rank"]))
+        st.metric(t(lang, "lk_ppg"), f"{r['PPG']:.1f}")
+        st.metric(t(lang, "lk_ts"), f"{r['TS_pct']:.3f}")
+        st.metric(t(lang, "lk_purity"), f"{r['purity']:.1f}%")
 
     with col2:
-        st.subheader("⚡ Impact")
-        impact_rk = int(r["impact_rank"]) if pd.notna(r["impact_rank"]) else "N/A"
-        st.metric("Rank", f"#{impact_rk}" if isinstance(impact_rk, int) else "N/A")
-        st.metric("GP", f"{int(r['GP'])}")
+        st.subheader(t(lang, "lk_impact"))
+        st.metric(t(lang, "lk_rank"), fmt_rank(r["impact_rank"]))
+        st.metric(t(lang, "lk_gp"), f"{int(r['GP'])}")
         if pd.notna(r.get("po_PPG")):
             delta = r["po_PPG"] - r["PPG"]
-            st.metric("Playoff PPG", f"{r['po_PPG']:.1f}", delta=f"{delta:+.1f}")
+            st.metric(t(lang, "lk_po_ppg"), f"{r['po_PPG']:.1f}", delta=f"{delta:+.1f}")
         else:
-            st.metric("Playoff PPG", "N/A")
+            st.metric(t(lang, "lk_po_ppg"), t(lang, "na"))
 
     with col3:
-        st.subheader("🎯 Playmaking")
-        play_rk = int(r["play_rank"]) if pd.notna(r["play_rank"]) else "N/A"
-        st.metric("Rank", f"#{play_rk}" if isinstance(play_rk, int) else "N/A")
-        st.metric("APG", f"{r['APG']:.1f}")
-        st.metric("AST/TOV", f"{r['ast_tov']:.2f}" if pd.notna(r["ast_tov"]) else "N/A")
+        st.subheader(t(lang, "lk_playmaking"))
+        st.metric(t(lang, "lk_rank"), fmt_rank(r["play_rank"]))
+        st.metric(t(lang, "lk_apg"), f"{r['APG']:.1f}")
+        st.metric(t(lang, "lk_ast_tov"),
+                  f"{r['ast_tov']:.2f}" if pd.notna(r["ast_tov"]) else t(lang, "na"))
 
     with col4:
-        st.subheader("🛡️ Def / 🏀 Reb")
-        def_rk = int(r["def_rank"]) if pd.notna(r.get("def_rank")) else "N/A"
-        st.metric("Defense Rank", f"#{def_rk}" if isinstance(def_rk, int) else "N/A")
-        reb_rk = int(r["reb_rank"]) if pd.notna(r.get("reb_rank")) else "N/A"
-        st.metric("Rebound Rank", f"#{reb_rk}" if isinstance(reb_rk, int) else "N/A")
+        st.subheader(t(lang, "lk_def_reb"))
+        st.metric(t(lang, "lk_def_rank"), fmt_rank(r.get("def_rank")))
+        st.metric(t(lang, "lk_reb_rank"), fmt_rank(r.get("reb_rank")))
         if pd.notna(r.get("reb_RPG")):
-            st.metric("RPG", f"{r['reb_RPG']:.1f}")
-            st.metric("ORB / DRB", f"{r['reb_OREB']:.1f} / {r['reb_DREB']:.1f}")
+            st.metric(t(lang, "lk_rpg"), f"{r['reb_RPG']:.1f}")
+        if pd.notna(r.get("reb_OREB")) and pd.notna(r.get("reb_DREB")):
+            st.metric(t(lang, "lk_orb_drb"), f"{r['reb_OREB']:.1f} / {r['reb_DREB']:.1f}")
 
-    # 得分结构
-    st.subheader("Scoring Breakdown")
+    st.subheader(t(lang, "lk_breakdown"))
     breakdown = pd.DataFrame({
-        "Source": ["2-Point", "3-Point", "Free Throw"],
-        "Percentage": [r["pct_2P"], r["pct_3P"], r["pct_FT"]]
-    }).set_index("Source")
+        "source": [t(lang, "lk_src_2p"), t(lang, "lk_src_3p"), t(lang, "lk_src_ft")],
+        "pct": [r["pct_2P"], r["pct_3P"], r["pct_FT"]],
+    }).set_index("source")
     st.bar_chart(breakdown, color="#00bcd4")
 
-    # 解释
-    st.subheader("Analysis")
+    st.subheader(t(lang, "lk_analysis"))
     factors = []
     if r["PPG"] > 25:
-        factors.append(f"✅ High volume scorer (PPG={r['PPG']:.1f})")
+        factors.append(t(lang, "f_high_volume", ppg=r["PPG"]))
     elif r["PPG"] > 20:
-        factors.append(f"✅ Solid scorer (PPG={r['PPG']:.1f})")
+        factors.append(t(lang, "f_solid_scorer", ppg=r["PPG"]))
     else:
-        factors.append(f"⚠️ Lower scoring volume (PPG={r['PPG']:.1f})")
+        factors.append(t(lang, "f_low_volume", ppg=r["PPG"]))
 
     if r["TS_pct"] > 0.58:
-        factors.append(f"✅ Elite efficiency (TS%={r['TS_pct']:.3f})")
+        factors.append(t(lang, "f_elite_eff", ts=r["TS_pct"]))
     elif r["TS_pct"] > 0.54:
-        factors.append(f"✅ Good efficiency (TS%={r['TS_pct']:.3f})")
+        factors.append(t(lang, "f_good_eff", ts=r["TS_pct"]))
     else:
-        factors.append(f"⚠️ Below-average efficiency (TS%={r['TS_pct']:.3f})")
+        factors.append(t(lang, "f_low_eff", ts=r["TS_pct"]))
 
     if r["pct_FT"] > 28:
-        factors.append(f"⚠️ Heavy FT reliance ({r['pct_FT']:.1f}%)")
+        factors.append(t(lang, "f_heavy_ft", ft=r["pct_FT"]))
     elif r["pct_FT"] < 18:
-        factors.append(f"✅ Low FT reliance ({r['pct_FT']:.1f}%)")
+        factors.append(t(lang, "f_low_ft", ft=r["pct_FT"]))
 
     if r["APG"] > 7:
-        factors.append(f"✅ Elite playmaker (APG={r['APG']:.1f})")
+        factors.append(t(lang, "f_elite_playmaker", apg=r["APG"]))
     elif r["APG"] > 4:
-        factors.append(f"✅ Good playmaker (APG={r['APG']:.1f})")
+        factors.append(t(lang, "f_good_playmaker", apg=r["APG"]))
     else:
-        factors.append(f"⚠️ Limited playmaking (APG={r['APG']:.1f})")
+        factors.append(t(lang, "f_limited_playmaking", apg=r["APG"]))
 
     if pd.isna(r["ast_tov"]):
-        factors.append("➖ 无失误记录 (1977-78 起才有该统计), 助失比不参与判断")
+        factors.append(t(lang, "f_no_tov"))
     elif r["ast_tov"] > 2.5:
-        factors.append(f"✅ Excellent decision-making (AST/TOV={r['ast_tov']:.2f})")
+        factors.append(t(lang, "f_excellent_decision", ratio=r["ast_tov"]))
     elif r["ast_tov"] < 1.5:
-        factors.append(f"⚠️ Turnover-prone (AST/TOV={r['ast_tov']:.2f})")
+        factors.append(t(lang, "f_turnover_prone", ratio=r["ast_tov"]))
 
     if pd.notna(r.get("po_PPG")) and r["po_GP"] > 50:
         if r["po_PPG"] > r["PPG"]:
-            factors.append(f"✅ Playoff riser ({r['po_PPG']:.1f} > {r['PPG']:.1f}, {int(r['po_GP'])} games)")
+            factors.append(t(lang, "f_po_riser", po=r["po_PPG"], reg=r["PPG"],
+                             games=int(r["po_GP"])))
         else:
-            factors.append(f"⚠️ Playoff decline ({r['po_PPG']:.1f} < {r['PPG']:.1f}, {int(r['po_GP'])} games)")
+            factors.append(t(lang, "f_po_decline", po=r["po_PPG"], reg=r["PPG"],
+                             games=int(r["po_GP"])))
     elif pd.notna(r.get("po_GP")) and r["po_GP"] < 50:
-        factors.append(f"⚠️ Limited playoff experience ({int(r['po_GP'])} games)")
+        factors.append(t(lang, "f_limited_po", games=int(r["po_GP"])))
 
     for f in factors:
         st.markdown(f)
 
-# ── Footer ──
+# ── 页脚 ──
 st.markdown("---")
-st.markdown("""
-*常规赛: NBA.com 官方接口 (1948-2024) + Basketball-Reference (2025-26) | 季后赛: NBA.com + ESPN (2025-26)*
-*101 名球员 | 时代修正: pace / 竞争强度 / 稀缺性 | 多队赛季只计合并数据 | 数据校验见 scripts/verify_*.py*
-""")
+st.markdown(t(lang, "footer_sources"))
+st.markdown(t(lang, "footer_notes"))

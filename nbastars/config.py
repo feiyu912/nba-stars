@@ -34,6 +34,9 @@ SCARCITY_K = 0.1              # 稀缺性斜率: 1 + z * K
 RIDGE_ALPHA = 2.0
 PLAYOFF_EXPERIENCE_K = 0.1    # 防守/篮板用的季后赛经验加成斜率
 MIN_SEASONS_FOR_TREND = 3
+# 参与排名所需的最少有效赛季数。巅峰窗口是 PEAK_YEARS 年, 样本不足这个年数时
+# "巅峰 5 年" 实际上是 1-4 个赛季的均值 —— 那样的名次没有可比性, 一律不参与排名。
+MIN_SEASONS_FOR_RANK = PEAK_YEARS
 
 # 2025-26 及之后: 常规赛数据来自 Basketball-Reference, 季后赛来自 ESPN (见 README)
 BREf_SEASON = "2025-26"

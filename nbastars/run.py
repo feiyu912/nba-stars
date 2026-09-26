@@ -100,24 +100,27 @@ def run_playmaking(reg: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
 
 def run_defense(reg: pd.DataFrame, po: pd.DataFrame, db: pd.DataFrame) -> pd.DataFrame:
     print("[防守能力] STL+BLK x 稀缺性 | 1973-74 前无抢断/盖帽记录: 不填充, 显示 N/A")
+    # 有效赛季数: 巅峰窗口是 5 年, 不足 5 个赛季的样本算不出可信的巅峰值
+    seasons_with_data = reg.groupby("player")["SPG"].apply(lambda s: int(s.notna().sum()))
+    eligible = seasons_with_data >= config.MIN_SEASONS_FOR_RANK
+
     res = engine.build_dimension(
         dimensions.defense_views(reg), po,
         name="defense", key="def",
         agg=dimensions.DEFENSE_AGG, views=dimensions.DEFENSE_VIEWS,
         playoff_mode="experience",
+        eligible=eligible,
     )
     print(f"    {engine.rank_quality_report(res, 'def')}")
 
-    spg = reg.groupby("player")["SPG"]
-    res["seasons_with_def_data"] = res["player"].map(
-        spg.apply(lambda s: int(s.notna().sum()))).fillna(0).astype(int)
+    res["seasons_with_def_data"] = res["player"].map(seasons_with_data).fillna(0).astype(int)
     res["defense_stats_missing"] = res["seasons_with_def_data"] == 0
-    res["season_coverage"] = res["player"].map(spg.apply(lambda s: s.notna().mean())).fillna(0)
+    res["sample_too_small"] = res["seasons_with_def_data"].between(1, config.MIN_SEASONS_FOR_RANK - 1)
     n_missing = int(res["defense_stats_missing"].sum())
-    thin = res[res["seasons_with_def_data"].between(1, config.PEAK_YEARS - 1)]
-    print(f"    整段生涯没有抢断/盖帽数据 (1973-74 之前): {n_missing} 人 — 不参与防守排名")
-    print(f"    有数据但不足 {config.PEAK_YEARS} 个赛季 (排名样本很薄, 已标注): {len(thin)} 人 — "
-          f"{', '.join(f'{r.player}({r.seasons_with_def_data}季)' for r in thin.itertuples())}")
+    n_thin = int(res["sample_too_small"].sum())
+    print(f"    没有抢断/盖帽记录 (1973-74 之前): {n_missing} 人 — 不参与排名")
+    print(f"    有效赛季不足 {config.MIN_SEASONS_FOR_RANK} 个 (算不出可信巅峰值): {n_thin} 人 — 不参与排名: "
+          f"{', '.join(f'{r.player}({r.seasons_with_def_data}季)' for r in res[res['sample_too_small']].itertuples())}")
 
     r = add_era_z(add_era_columns(reg), ["SPG", "BPG"])
     feats = r.groupby("player").agg({"SPG_era_z": "mean", "BPG_era_z": "mean",
@@ -135,14 +138,14 @@ def run_defense(reg: pd.DataFrame, po: pd.DataFrame, db: pd.DataFrame) -> pd.Dat
     res = res.merge(base[["player", "d_dpm"]], on="player", how="left")
     res = res.merge(pd.DataFrame({"player": base["player"], "def_impact_score": ridge.predictions.values}),
                     on="player", how="left")
-    # 没有抢断/盖帽数据的人不做预测: 特征全靠中位数填充, 预测值没有意义
-    res.loc[res["defense_stats_missing"], "def_impact_score"] = pd.NA
+    # 没有数据或样本不足的人不做预测: 特征靠中位数填充、样本又薄, 预测值没有意义
+    res.loc[res["defense_stats_missing"] | res["sample_too_small"], "def_impact_score"] = pd.NA
     res["def_impact_rank"] = res["def_impact_score"].rank(ascending=False, method="min").astype("Int64")
 
     res = res.rename(columns={"reg_def_output": "reg_def"})   # 展示用名 (与仪表盘一致)
     _write(res[["player", "def_rank", "def_tied", "reg_SPG", "reg_BPG", "reg_def",
-                "po_GP", "defense_stats_missing", "seasons_with_def_data",
-                "season_coverage", "total_A_rank", "total_C_rank",
+                "po_GP", "defense_stats_missing", "sample_too_small", "seasons_with_def_data",
+                "total_A_rank", "total_C_rank",
                 "def_impact_rank", "def_impact_score", "d_dpm"]], "defense_ranking.csv")
     return res
 

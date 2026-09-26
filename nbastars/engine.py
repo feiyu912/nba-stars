@@ -65,8 +65,13 @@ def build_dimension(
     agg: AggSpec,
     views: ViewSpec,
     playoff_mode: str,
+    eligible: pd.Series | None = None,
 ) -> pd.DataFrame:
-    """跑完一个维度, 返回带 {key}_rank 的球员表。"""
+    """跑完一个维度, 返回带 {key}_rank 的球员表。
+
+    eligible: 按球员索引的布尔序列, False 表示有效样本不足, 不参与排名
+              (名次为 NA)。传 None 表示所有人都够。
+    """
     reg_sum = summarize(reg, "reg", agg, views)
     career = reg_sum
 
@@ -104,7 +109,10 @@ def build_dimension(
 
     view_ranks = []
     for view in views:
-        r = career[f"total_{view}"].rank(ascending=False, method="min")
+        total = career[f"total_{view}"]
+        if eligible is not None:
+            total = total.where(career["player"].map(eligible).fillna(False))
+        r = total.rank(ascending=False, method="min")
         career[f"total_{view}_rank"] = r.astype("Int64")
         view_ranks.append(r)
 
