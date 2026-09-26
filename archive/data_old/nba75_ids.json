@@ -1,0 +1,387 @@
+[
+  {
+    "name": "Kareem Abdul-Jabbar",
+    "nba_id": 76003,
+    "active": false
+  },
+  {
+    "name": "Ray Allen",
+    "nba_id": 951,
+    "active": false
+  },
+  {
+    "name": "Giannis Antetokounmpo",
+    "nba_id": 203507,
+    "active": true
+  },
+  {
+    "name": "Carmelo Anthony",
+    "nba_id": 2546,
+    "active": false
+  },
+  {
+    "name": "Nate Archibald",
+    "nba_id": 76054,
+    "active": false
+  },
+  {
+    "name": "Paul Arizin",
+    "nba_id": 76056,
+    "active": false
+  },
+  {
+    "name": "Charles Barkley",
+    "nba_id": 787,
+    "active": false
+  },
+  {
+    "name": "Rick Barry",
+    "nba_id": 600013,
+    "active": false
+  },
+  {
+    "name": "Elgin Baylor",
+    "nba_id": 76127,
+    "active": false
+  },
+  {
+    "name": "Dave Bing",
+    "nba_id": 76166,
+    "active": false
+  },
+  {
+    "name": "Larry Bird",
+    "nba_id": 1449,
+    "active": false
+  },
+  {
+    "name": "Kobe Bryant",
+    "nba_id": 977,
+    "active": false
+  },
+  {
+    "name": "Wilt Chamberlain",
+    "nba_id": 76375,
+    "active": false
+  },
+  {
+    "name": "Bob Cousy",
+    "nba_id": 600003,
+    "active": false
+  },
+  {
+    "name": "Dave Cowens",
+    "nba_id": 76462,
+    "active": false
+  },
+  {
+    "name": "Billy Cunningham",
+    "nba_id": 76487,
+    "active": false
+  },
+  {
+    "name": "Stephen Curry",
+    "nba_id": 201939,
+    "active": true
+  },
+  {
+    "name": "Anthony Davis",
+    "nba_id": 203076,
+    "active": true
+  },
+  {
+    "name": "Dave DeBusschere",
+    "nba_id": 76545,
+    "active": false
+  },
+  {
+    "name": "Clyde Drexler",
+    "nba_id": 17,
+    "active": false
+  },
+  {
+    "name": "Tim Duncan",
+    "nba_id": 1495,
+    "active": false
+  },
+  {
+    "name": "Kevin Durant",
+    "nba_id": 201142,
+    "active": true
+  },
+  {
+    "name": "Julius Erving",
+    "nba_id": 76681,
+    "active": false
+  },
+  {
+    "name": "Patrick Ewing",
+    "nba_id": 121,
+    "active": false
+  },
+  {
+    "name": "Walt Frazier",
+    "nba_id": 76750,
+    "active": false
+  },
+  {
+    "name": "Kevin Garnett",
+    "nba_id": 708,
+    "active": false
+  },
+  {
+    "name": "George Gervin",
+    "nba_id": 76804,
+    "active": false
+  },
+  {
+    "name": "Hal Greer",
+    "nba_id": 76882,
+    "active": false
+  },
+  {
+    "name": "James Harden",
+    "nba_id": 201935,
+    "active": true
+  },
+  {
+    "name": "John Havlicek",
+    "nba_id": 76970,
+    "active": false
+  },
+  {
+    "name": "Elvin Hayes",
+    "nba_id": 76979,
+    "active": false
+  },
+  {
+    "name": "Allen Iverson",
+    "nba_id": 947,
+    "active": false
+  },
+  {
+    "name": "LeBron James",
+    "nba_id": 2544,
+    "active": true
+  },
+  {
+    "name": "Magic Johnson",
+    "nba_id": 77142,
+    "active": false
+  },
+  {
+    "name": "Sam Jones",
+    "nba_id": 77196,
+    "active": false
+  },
+  {
+    "name": "Michael Jordan",
+    "nba_id": 893,
+    "active": false
+  },
+  {
+    "name": "Jason Kidd",
+    "nba_id": 467,
+    "active": false
+  },
+  {
+    "name": "Kawhi Leonard",
+    "nba_id": 202695,
+    "active": true
+  },
+  {
+    "name": "Damian Lillard",
+    "nba_id": 203081,
+    "active": true
+  },
+  {
+    "name": "Jerry Lucas",
+    "nba_id": 77418,
+    "active": false
+  },
+  {
+    "name": "Karl Malone",
+    "nba_id": 252,
+    "active": false
+  },
+  {
+    "name": "Moses Malone",
+    "nba_id": 77449,
+    "active": false
+  },
+  {
+    "name": "Pete Maravich",
+    "nba_id": 77459,
+    "active": false
+  },
+  {
+    "name": "Bob McAdoo",
+    "nba_id": 77498,
+    "active": false
+  },
+  {
+    "name": "Kevin McHale",
+    "nba_id": 1450,
+    "active": false
+  },
+  {
+    "name": "George Mikan",
+    "nba_id": 600012,
+    "active": false
+  },
+  {
+    "name": "Reggie Miller",
+    "nba_id": 397,
+    "active": false
+  },
+  {
+    "name": "Earl Monroe",
+    "nba_id": 600006,
+    "active": false
+  },
+  {
+    "name": "Steve Nash",
+    "nba_id": 959,
+    "active": false
+  },
+  {
+    "name": "Dirk Nowitzki",
+    "nba_id": 1717,
+    "active": false
+  },
+  {
+    "name": "Hakeem Olajuwon",
+    "nba_id": 165,
+    "active": false
+  },
+  {
+    "name": "Shaquille O'Neal",
+    "nba_id": 406,
+    "active": false
+  },
+  {
+    "name": "Robert Parish",
+    "nba_id": 305,
+    "active": false
+  },
+  {
+    "name": "Chris Paul",
+    "nba_id": 101108,
+    "active": true
+  },
+  {
+    "name": "Gary Payton",
+    "nba_id": 56,
+    "active": false
+  },
+  {
+    "name": "Bob Pettit",
+    "nba_id": 77847,
+    "active": false
+  },
+  {
+    "name": "Paul Pierce",
+    "nba_id": 1718,
+    "active": false
+  },
+  {
+    "name": "Scottie Pippen",
+    "nba_id": 937,
+    "active": false
+  },
+  {
+    "name": "Willis Reed",
+    "nba_id": 77929,
+    "active": false
+  },
+  {
+    "name": "Oscar Robertson",
+    "nba_id": 600015,
+    "active": false
+  },
+  {
+    "name": "David Robinson",
+    "nba_id": 764,
+    "active": false
+  },
+  {
+    "name": "Dennis Rodman",
+    "nba_id": 23,
+    "active": false
+  },
+  {
+    "name": "Bill Russell",
+    "nba_id": 78049,
+    "active": false
+  },
+  {
+    "name": "Dolph Schayes",
+    "nba_id": 78076,
+    "active": false
+  },
+  {
+    "name": "Bill Sharman",
+    "nba_id": 78126,
+    "active": false
+  },
+  {
+    "name": "John Stockton",
+    "nba_id": 304,
+    "active": false
+  },
+  {
+    "name": "Isiah Thomas",
+    "nba_id": 78318,
+    "active": false
+  },
+  {
+    "name": "Nate Thurmond",
+    "nba_id": 600001,
+    "active": false
+  },
+  {
+    "name": "Wes Unseld",
+    "nba_id": 78392,
+    "active": false
+  },
+  {
+    "name": "Dwyane Wade",
+    "nba_id": 2548,
+    "active": false
+  },
+  {
+    "name": "Bill Walton",
+    "nba_id": 78450,
+    "active": false
+  },
+  {
+    "name": "Jerry West",
+    "nba_id": 78497,
+    "active": false
+  },
+  {
+    "name": "Russell Westbrook",
+    "nba_id": 201566,
+    "active": true
+  },
+  {
+    "name": "Lenny Wilkens",
+    "nba_id": 78530,
+    "active": false
+  },
+  {
+    "name": "Dominique Wilkins",
+    "nba_id": 1122,
+    "active": false
+  },
+  {
+    "name": "James Worthy",
+    "nba_id": 1460,
+    "active": false
+  },
+  {
+    "name": "Luka Doncic",
+    "nba_id": 1629029,
+    "active": true
+  }
+]

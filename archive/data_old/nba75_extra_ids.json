@@ -1,0 +1,122 @@
+[
+  {
+    "name": "Nikola Jokic",
+    "nba_id": 203999,
+    "active": true
+  },
+  {
+    "name": "Joel Embiid",
+    "nba_id": 203954,
+    "active": true
+  },
+  {
+    "name": "Shai Gilgeous-Alexander",
+    "nba_id": 1628983,
+    "active": true
+  },
+  {
+    "name": "Jayson Tatum",
+    "nba_id": 1628369,
+    "active": true
+  },
+  {
+    "name": "Anthony Edwards",
+    "nba_id": 1630162,
+    "active": true
+  },
+  {
+    "name": "Devin Booker",
+    "nba_id": 1626164,
+    "active": true
+  },
+  {
+    "name": "Ja Morant",
+    "nba_id": 1629630,
+    "active": true
+  },
+  {
+    "name": "Donovan Mitchell",
+    "nba_id": 1628378,
+    "active": true
+  },
+  {
+    "name": "Kyrie Irving",
+    "nba_id": 202681,
+    "active": true
+  },
+  {
+    "name": "Jimmy Butler",
+    "nba_id": 202710,
+    "active": true
+  },
+  {
+    "name": "Tracy McGrady",
+    "nba_id": 1503,
+    "active": false
+  },
+  {
+    "name": "Yao Ming",
+    "nba_id": 2397,
+    "active": false
+  },
+  {
+    "name": "Dwight Howard",
+    "nba_id": 2730,
+    "active": false
+  },
+  {
+    "name": "Vince Carter",
+    "nba_id": 1713,
+    "active": false
+  },
+  {
+    "name": "Paul George",
+    "nba_id": 202331,
+    "active": true
+  },
+  {
+    "name": "Klay Thompson",
+    "nba_id": 202691,
+    "active": true
+  },
+  {
+    "name": "Tony Parker",
+    "nba_id": 2225,
+    "active": false
+  },
+  {
+    "name": "Pau Gasol",
+    "nba_id": 2200,
+    "active": false
+  },
+  {
+    "name": "Chris Bosh",
+    "nba_id": 2547,
+    "active": false
+  },
+  {
+    "name": "Draymond Green",
+    "nba_id": 203110,
+    "active": true
+  },
+  {
+    "name": "Manu Ginobili",
+    "nba_id": 1938,
+    "active": false
+  },
+  {
+    "name": "Alex English",
+    "nba_id": 76673,
+    "active": false
+  },
+  {
+    "name": "Bernard King",
+    "nba_id": 77264,
+    "active": false
+  },
+  {
+    "name": "Adrian Dantley",
+    "nba_id": 76504,
+    "active": false
+  }
+]
