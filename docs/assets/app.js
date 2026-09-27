@@ -120,6 +120,10 @@ let lang = localStorage.getItem('nba_lang') || 'en';
 const t = (k) => I18N[lang][k];
 const fmt = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d));
 const int = (v) => (v === null || v === undefined ? '—' : String(Math.round(v)));
+// 显示名: 数据键始终是拉丁名, 只有显示层换成中文 —— 链接/曲线索引/查找都不会碎
+const disp = (p) => (lang === 'zh' && p && p.nameZh ? p.nameZh : (p ? p.name : ''));
+const shortName = (p) => (lang === 'zh' && p && p.nameZh)
+  ? p.nameZh.split('·').pop() : (p ? p.name.split(' ').slice(-1)[0] : '');
 const pct = (rank, dim) => (rank === null || rank === undefined ? null
   : Math.max(6, Math.round((1 - (rank - 1) / Math.max(1, RANKED_N[dim] - 1)) * 100)));
 
@@ -202,7 +206,7 @@ function spark(name, color, key = 'ppg') {
     'stroke-linejoin': 'round', opacity: 0.85 }));
   const peak = vals.indexOf(Math.max(...vals));
   g.append(s('circle', { cx: X(peak), cy: Y(vals[peak]), r: 1.7, fill: color }));
-  return tip(g, tipRows(name, [[t('c_' + key) + ' 峰值', fmt(vals[peak], key === 'ts' ? 3 : 1)],
+  return tip(g, tipRows(disp(BY[name]), [[t('c_' + key) + ' 峰值', fmt(vals[peak], key === 'ts' ? 3 : 1)],
     [t('c_span'), `${c.season[0]}–${c.season[c.season.length - 1]}`]]));
 }
 
@@ -216,7 +220,7 @@ function board(rows, { dim, valueKey, digits = 1, altKey = null, altDigits = 1, 
     ...rows.map((p) => h('div', { class: 'board-row' },
       rankCell(p[dim]),
       badge(p),
-      h('span', { class: 'nm' }, h('span', { class: 'who' }, p.name), ...tags(p, dim),
+      h('span', { class: 'nm' }, h('span', { class: 'who' }, disp(p)), ...tags(p, dim),
         h('span', { class: 'meta' }, `${p.first.slice(2, 4)}–${p.last.slice(2, 4)}`)),
       h('span', { style: 'display:flex;justify-content:flex-end' }, spark(p.name, HUE[dim], dim === 'playmaking' ? 'ppg' : 'ppg')),
       h('span', { class: 'v', style: `color:${HUE[dim]}` }, fmt(p[valueKey], digits) + unit),
@@ -277,15 +281,15 @@ function dotStrip(rows, { dim, valueKey, color, labelTop = 6, digits = 1, unit =
   rows.forEach((r, i) => {
     const cx = x(r[valueKey]), cy = mid + jitter(i, rows.length);
     g.append(tip(s('circle', { class: 'dot', cx, cy, r: 4, fill: color,
-      opacity: i < 10 ? 0.95 : 0.45 }), tipRows(r.name,
+      opacity: i < 10 ? 0.95 : 0.45 }), tipRows(disp(r),
       [[t('c_rank') + ' / ' + .0, Math.round(r[dim])], [t('c_' + valueKey) || valueKey, fmt(r[valueKey], digits)],
         [t('c_span'), `${r.first}–${r.last}`], ['Team', `${r.team} · ${r.seasons} ${t('c_seasons')}`]])));
   });
   // 标注头部
   rows.slice(0, labelTop).forEach((r) => {
     const cx = x(r[valueKey]);
-    g.append(s('text', { class: 'dt', x: cx, y: H - 46, 'text-anchor': cx > W - 90 ? 'end' : cx < 90 ? 'start' : 'middle' },
-      r.name.split(' ').slice(-1)[0]));
+    g.append(s('text', { class: 'dt', x: cx, y: H - 46,
+      'text-anchor': cx > W - 90 ? 'end' : cx < 90 ? 'start' : 'middle' }, shortName(r)));
     g.append(s('line', { class: 'gl dash', x1: cx, x2: cx, y1: H - 42, y2: mid - 6 }));
   });
   return g;
@@ -301,13 +305,13 @@ function splitChart(rows) {
     '2P / 3P / FT'));
   rows.forEach((p, i) => {
     const y = 22 + i * 26;
-    g.append(s('text', { class: 'dl', x: pad, y: y + 11 }, p.name));
+    g.append(s('text', { class: 'dl', x: pad, y: y + 11 }, disp(p)));
     g.append(s('text', { class: 'dv', x: x0 - 8, y: y + 11, 'text-anchor': 'end' }, `${fmt(p.splitFt, 0)}%`));
     let cx = x0;
     segs.forEach(([k, c, lab]) => {
       const ww = (p[k] / 100) * w;
       if (ww > 0) g.append(tip(s('rect', { x: cx, y, width: ww, height: 13, fill: c, opacity: 0.9 }),
-        tipRows(p.name, [[lab, `${fmt(p[k], 1)}%`], [t('c_ppg'), fmt(p.ppg)]])));
+        tipRows(disp(p), [[lab, `${fmt(p[k], 1)}%`], [t('c_ppg'), fmt(p.ppg)]])));
       cx += ww;
     });
   });
@@ -344,11 +348,11 @@ function scatter(rows) {
     const top = p.scoring <= 10;
     g.append(tip(s('circle', { class: 'dot', cx: X(p.ppg), cy: Y(p.ts), r: top ? 5.5 : 4,
       fill: top ? HUE.scoring : HUE.impact, opacity: note.has(p.name) || top ? 0.95 : 0.42 }),
-    tipRows(p.name, [[t('c_ppg'), fmt(p.ppg)], [t('c_ts'), fmt(p.ts, 3)],
+    tipRows(disp(p), [[t('c_ppg'), fmt(p.ppg)], [t('c_ts'), fmt(p.ts, 3)],
       [t('n_scoring') + ' #', int(p.scoring)], [t('c_span'), `${p.first}–${p.last}`]])));
   });
-  note.forEach((p) => g.append(s('text', { class: 'dt', x: X(BY[p].ppg) + 9, y: Y(BY[p].ts) + 3 },
-    p.split(' ').slice(-1)[0])));
+  note.forEach((n) => g.append(s('text', { class: 'dt', x: X(BY[n].ppg) + 9, y: Y(BY[n].ts) + 3 },
+    shortName(BY[n]))));
   return g;
 }
 
@@ -364,12 +368,12 @@ function dumbbell(rows, { aKey, bKey, digits = 1 }) {
   rows.forEach((p, i) => {
     const y = 22 + i * 26, mid = y + 6;
     const up = p[bKey] >= p[aKey];
-    g.append(s('text', { class: 'dl', x: pad, y: mid + 4 }, p.name));
+    g.append(s('text', { class: 'dl', x: pad, y: mid + 4 }, disp(p)));
     g.append(s('line', { x1: X(p[aKey]), x2: X(p[bKey]), y1: mid, y2: mid, stroke: 'var(--line)', 'stroke-width': 2 }));
     g.append(tip(s('circle', { cx: X(p[aKey]), cy: mid, r: 3.6, fill: 'var(--text-4)' }),
-      tipRows(p.name, [[t('c_reg'), fmt(p[aKey], digits)], [t('c_po'), fmt(p[bKey], digits)]])));
+      tipRows(disp(p), [[t('c_reg'), fmt(p[aKey], digits)], [t('c_po'), fmt(p[bKey], digits)]])));
     g.append(tip(s('circle', { cx: X(p[bKey]), cy: mid, r: 4.4, fill: up ? 'var(--up)' : 'var(--down)' }),
-      tipRows(p.name, [[t('c_reg'), fmt(p[aKey], digits)], [t('c_po'), fmt(p[bKey], digits)],
+      tipRows(disp(p), [[t('c_reg'), fmt(p[aKey], digits)], [t('c_po'), fmt(p[bKey], digits)],
         [t('c_change'), `${up ? '+' : ''}${fmt(p[bKey] - p[aKey], digits)}`]])));
     g.append(s('text', { class: 'dv', x: W - pad, y: mid + 4, 'text-anchor': 'end',
       fill: up ? 'var(--up)' : 'var(--down)' },
@@ -454,7 +458,7 @@ const VIEWS = {
       sec(t('top5'), h('div', { class: 'grid g3' }, ...DIMS.slice(0, 5).map((d) => h('div', { class: 'card' },
         h('div', { class: 'kpi-l', style: `color:${HUE[d]}` }, t('n_' + d)),
         ...rankedBy(d, 5).map((p) => h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:7px' },
-          rankCell(p[d]), badge(p), h('span', { style: 'font-size:12.5px' }, p.name),
+          rankCell(p[d]), badge(p), h('span', { style: 'font-size:12.5px' }, disp(p)),
           h('span', { class: 'v', style: 'margin-left:auto;color:var(--text-3);font-size:11.5px' },
             d === 'playmaking' ? `${fmt(p.apg)} APG` : d === 'rebounding' ? `${fmt(p.rpg)} RPG` : `${fmt(p.ppg)} PPG`))))))),
     ];
@@ -470,7 +474,7 @@ const VIEWS = {
       sec(t('s_split'), chartCard(t('s_split'), splitChart(rankedBy('scoring', 18)))),
       sec(t('s_table'), dtable([
         { key: 'scoring', label: t('c_rank'), render: (r) => rankCell(r.scoring) },
-        { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, r.name)) },
+        { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, disp(r))) },
         { key: 'ppg', label: t('c_ppg') }, { key: 'ts', label: t('c_ts'), digits: 3 },
         { key: 'splitFt', label: t('c_ft') }, { key: 'gp', label: t('c_gp'), digits: 0 },
       ], D.players.slice().sort((a, b) => a.scoring - b.scoring), { defaultSort: 'scoring' })),
@@ -507,18 +511,18 @@ const VIEWS = {
         h('div', { class: 'grid g2' },
           dtable([
             { key: 'stl_rank', label: t('c_rank'), render: (r) => rankCell(r.stl_rank) },
-            { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, r.name)) },
+            { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, disp(r))) },
             { key: 'stl', label: t('c_stl'), digits: 2 },
           ], D.subsets.steals.map((x) => ({ ...BY[x.name], stl: x.reg_SPG, stl_rank: x.rank })), { defaultSort: 'stl_rank' }),
           dtable([
             { key: 'blk_rank', label: t('c_rank'), render: (r) => rankCell(r.blk_rank) },
-            { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, r.name)) },
+            { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, disp(r))) },
             { key: 'blk', label: t('c_blk'), digits: 2 },
           ], D.subsets.blocks.map((x) => ({ ...BY[x.name], blk: x.reg_BPG, blk_rank: x.rank })), { defaultSort: 'blk_rank' }))),
       h('p', { class: 'note' }, t('t_note_stlblk')),
       sec(t('s_dimpact'), dtable([
         { key: 'rank', label: t('c_rank'), render: (r) => rankCell(r.rank) },
-        { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(BY[r.name]), h('span', { class: 'who' }, r.name)) },
+        { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(BY[r.name]), h('span', { class: 'who' }, disp(BY[r.name]))) },
         { key: 'def_impact_score', label: t('c_pred'), digits: 2 },
         { key: 'd_dpm', label: t('c_actual'), digits: 2 },
         { key: 'reg_SPG', label: t('c_stl'), digits: 2 },
@@ -538,12 +542,12 @@ const VIEWS = {
         h('div', { class: 'grid g2' },
           dtable([
             { key: 'oreb_rank', label: t('c_rank'), render: (r) => rankCell(r.oreb_rank) },
-            { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, r.name)) },
+            { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, disp(r))) },
             { key: 'peak_OREB', label: t('c_peak_orb'), digits: 2 },
           ], D.subsets.oreb.map((x) => ({ ...BY[x.name], peak_OREB: x.peak_OREB, oreb_rank: x.rank })), { defaultSort: 'oreb_rank' }),
           dtable([
             { key: 'dreb_rank', label: t('c_rank'), render: (r) => rankCell(r.dreb_rank) },
-            { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, r.name)) },
+            { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, disp(r))) },
             { key: 'peak_DREB', label: t('c_peak_drb'), digits: 2 },
           ], D.subsets.dreb.map((x) => ({ ...BY[x.name], peak_DREB: x.peak_DREB, dreb_rank: x.rank })), { defaultSort: 'dreb_rank' }))),
     ];
@@ -558,7 +562,7 @@ const VIEWS = {
         dumbbell(po, { aKey: 'ppg', bKey: 'po_ppg' }))),
       sec(t('s_cross'), dtable([
         { key: 'scoring', label: t('c_rank'), render: (r) => rankCell(r.scoring) },
-        { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, r.name)) },
+        { key: 'name', label: t('c_player'), align: 'l', render: (r) => h('span', { class: 'nm' }, badge(r), h('span', { class: 'who' }, disp(r))) },
         { key: 'scoring', label: t('n_scoring') }, { key: 'impact', label: t('n_impact') },
         { key: 'playmaking', label: t('n_playmaking') }, { key: 'defense', label: t('n_defense') },
         { key: 'rebounding', label: t('n_rebounding') }, { key: 'ppg', label: t('c_ppg') },
@@ -574,16 +578,17 @@ const VIEWS = {
     let cur = 'Michael Jordan';
     const paint = () => {
       const q = search.value.trim().toLowerCase();
-      list.replaceChildren(...D.players.filter((p) => p.name.toLowerCase().includes(q))
+      list.replaceChildren(...D.players.filter((p) => p.name.toLowerCase().includes(q)
+        || (p.nameZh || '').includes(search.value.trim()))
         .sort((a, b) => (a.scoring ?? 999) - (b.scoring ?? 999))
         .map((p) => h('button', { 'aria-current': p.name === cur ? 'true' : 'false',
           onclick: () => { cur = p.name; paint(); } },
-        badge(p), h('span', {}, p.name), h('span', { class: 'v' }, `#${int(p.scoring)}`))));
+        badge(p), h('span', {}, disp(p)), h('span', { class: 'v' }, `#${int(p.scoring)}`))));
       const p = BY[cur];
       detail.replaceChildren(
         h('div', { class: 'head', style: 'margin-bottom:14px' },
           h('div', { class: 'nm', style: 'gap:12px' }, badge(p),
-            h('div', {}, h('h2', { style: 'margin:0' }, p.name),
+            h('div', {}, h('h2', { style: 'margin:0' }, disp(p)),
               h('p', { style: 'margin:2px 0 0' },
                 `${p.first}–${p.last} · ${p.seasons} ${t('c_seasons')} · ${p.gp} ${t('c_gp')} · ${p.team}`)))),
         h('div', { class: 'mrow' }, ...[['ppg', p.ppg, 1], ['rpg', p.rpg, 1], ['apg', p.apg, 1], ['ts', p.ts, 3]]

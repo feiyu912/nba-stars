@@ -62,6 +62,63 @@ TEAM_COLORS = {
 }
 
 
+
+# 球员中文名 (标准译名, 与虎扑/NBA 中文官网一致)。
+# 数据键仍然是拉丁名 —— 只有显示层用它, 这样链接/查找/曲线索引都不会碎。
+NAME_ZH = {
+    "Adrian Dantley": "阿德里安·丹特利", "Alex English": "亚历克斯·英格利什",
+    "Allen Iverson": "阿伦·艾弗森", "Anthony Davis": "安东尼·戴维斯",
+    "Anthony Edwards": "安东尼·爱德华兹", "Bernard King": "伯纳德·金",
+    "Bill Russell": "比尔·拉塞尔", "Bill Sharman": "比尔·沙曼",
+    "Bill Walton": "比尔·沃顿", "Billy Cunningham": "比利·坎宁安",
+    "Bob Cousy": "鲍勃·库西", "Bob McAdoo": "鲍勃·麦卡杜",
+    "Bob Pettit": "鲍勃·佩蒂特", "Carmelo Anthony": "卡梅隆·安东尼",
+    "Charles Barkley": "查尔斯·巴克利", "Chris Bosh": "克里斯·波什",
+    "Chris Paul": "克里斯·保罗", "Clyde Drexler": "克莱德·德雷克斯勒",
+    "Damian Lillard": "达米安·利拉德", "Dave Bing": "戴夫·宾",
+    "Dave Cowens": "戴夫·考恩斯", "Dave DeBusschere": "戴夫·德布斯切尔",
+    "David Robinson": "大卫·罗宾逊", "Dennis Rodman": "丹尼斯·罗德曼",
+    "Devin Booker": "德文·布克", "Dirk Nowitzki": "德克·诺维茨基",
+    "Dolph Schayes": "多尔夫·谢伊斯", "Dominique Wilkins": "多米尼克·威尔金斯",
+    "Donovan Mitchell": "多诺万·米切尔", "Draymond Green": "德雷蒙德·格林",
+    "Dwight Howard": "德怀特·霍华德", "Dwyane Wade": "德维恩·韦德",
+    "Earl Monroe": "厄尔·门罗", "Elgin Baylor": "埃尔金·贝勒",
+    "Elvin Hayes": "埃尔文·海耶斯", "Gary Payton": "加里·佩顿",
+    "George Gervin": "乔治·格文", "George Mikan": "乔治·麦肯",
+    "Giannis Antetokounmpo": "扬尼斯·阿德托昆博", "Hakeem Olajuwon": "哈基姆·奥拉朱旺",
+    "Hal Greer": "哈尔·格里尔", "Isiah Thomas": "伊赛亚·托马斯",
+    "Ja Morant": "贾·莫兰特", "James Harden": "詹姆斯·哈登",
+    "James Worthy": "詹姆斯·沃西", "Jason Kidd": "贾森·基德",
+    "Jayson Tatum": "杰森·塔图姆", "Jerry Lucas": "杰里·卢卡斯",
+    "Jerry West": "杰里·韦斯特", "Jimmy Butler": "吉米·巴特勒",
+    "Joel Embiid": "乔尔·恩比德", "John Havlicek": "约翰·哈夫利切克",
+    "John Stockton": "约翰·斯托克顿", "Julius Erving": "朱利叶斯·欧文",
+    "Kareem Abdul-Jabbar": "卡里姆·阿卜杜尔-贾巴尔", "Karl Malone": "卡尔·马龙",
+    "Kawhi Leonard": "科怀·伦纳德", "Kevin Durant": "凯文·杜兰特",
+    "Kevin Garnett": "凯文·加内特", "Kevin McHale": "凯文·麦克海尔",
+    "Klay Thompson": "克莱·汤普森", "Kobe Bryant": "科比·布莱恩特",
+    "Kyrie Irving": "凯里·欧文", "Larry Bird": "拉里·伯德",
+    "LeBron James": "勒布朗·詹姆斯", "Lenny Wilkens": "兰尼·威尔肯斯",
+    "Luka Doncic": "卢卡·东契奇", "Magic Johnson": "魔术师约翰逊",
+    "Manu Ginobili": "马努·吉诺比利", "Michael Jordan": "迈克尔·乔丹",
+    "Moses Malone": "摩西·马龙", "Nate Archibald": "内特·阿奇博尔德",
+    "Nate Thurmond": "内特·瑟蒙德", "Nikola Jokic": "尼古拉·约基奇",
+    "Oscar Robertson": "奥斯卡·罗伯特森", "Patrick Ewing": "帕特里克·尤因",
+    "Pau Gasol": "保罗·加索尔", "Paul Arizin": "保罗·阿里金",
+    "Paul George": "保罗·乔治", "Paul Pierce": "保罗·皮尔斯",
+    "Pete Maravich": "皮特·马拉维奇", "Ray Allen": "雷·阿伦",
+    "Reggie Miller": "雷吉·米勒", "Rick Barry": "里克·巴里",
+    "Robert Parish": "罗伯特·帕里什", "Russell Westbrook": "拉塞尔·威斯布鲁克",
+    "Sam Jones": "萨姆·琼斯", "Scottie Pippen": "斯科蒂·皮蓬",
+    "Shai Gilgeous-Alexander": "谢伊·吉尔杰斯-亚历山大", "Shaquille O'Neal": "沙奎尔·奥尼尔",
+    "Stephen Curry": "斯蒂芬·库里", "Steve Nash": "史蒂夫·纳什",
+    "Tim Duncan": "蒂姆·邓肯", "Tony Parker": "托尼·帕克",
+    "Tracy McGrady": "特雷西·麦克格雷迪", "Vince Carter": "文斯·卡特",
+    "Walt Frazier": "沃尔特·弗雷泽", "Wes Unseld": "韦斯·昂塞尔德",
+    "Willis Reed": "威利斯·里德", "Wilt Chamberlain": "威尔特·张伯伦",
+    "Yao Ming": "姚明",
+}
+
 def primary_franchise(reg: pd.DataFrame) -> dict[str, str]:
     """出场最多的球队 = 球员的代表球队 (排除 TOT 合并行)"""
     real = reg[reg["team"].str.upper() != "TOT"]
@@ -146,6 +203,7 @@ def build_payload() -> dict:
         team = teams.get(r.player, "")
         rec["team"] = team
         rec["teamColor"] = TEAM_COLORS.get(team, "#7c8899")
+        rec["nameZh"] = NAME_ZH.get(r.player)
         records.append(rec)
 
     # ── 生涯曲线: 每季场均得分/真实命中率 ──
@@ -182,6 +240,10 @@ def build_payload() -> dict:
         "playoff_pre2002_rows": int((po["season"] < "2002-03").sum()),
         "generated": date.today().isoformat(),
     }
+
+    missing_zh = [r["name"] for r in records if not r["nameZh"]]
+    if missing_zh:
+        raise SystemExit(f"这些球员没有中文名, 请补进 NAME_ZH: {missing_zh}")
 
     return {"players": records, "curves": curves, "subsets": subsets,
             "meta": verification}
