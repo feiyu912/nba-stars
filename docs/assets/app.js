@@ -644,13 +644,13 @@ function render() {
   main.replaceChildren(...VIEWS[cur]());
   document.getElementById('side').replaceChildren(
     h('div', { class: 'side-brand' },
-      h('div', { class: 'side-brand-row' },
-        h('span', {}, '🏀'), h('h1', {}, t('brand')),
+      h('div', { class: 'side-brand-row' }, h('span', {}, '🏀'), h('h1', {}, t('brand'))),
+      h('div', { class: 'side-brand-sub' },
+        h('p', {}, t('brandSub')),
         h('div', { class: 'lang' }, ...['en', 'zh'].map((l) => h('button', {
           'aria-pressed': l === lang ? 'true' : 'false',
           onclick: () => { lang = l; localStorage.setItem('nba_lang', l); render(); },
-        }, l === 'en' ? 'EN' : '中文')))),
-      h('p', {}, t('brandSub'))),
+        }, l === 'en' ? 'EN' : '中文'))))),
     ...NAVG.map((grp) => h('div', { class: 'side-group' },
       h('span', {}, t(grp.g)),
       ...grp.items.map((k) => h('a', {

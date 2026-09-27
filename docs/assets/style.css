@@ -75,11 +75,12 @@ a:hover { text-decoration: underline; }
 .side-brand { padding: 0 8px 14px; }
 .side-brand-row { display: flex; align-items: center; gap: 8px; }
 .side-brand h1 {
-  font-size: 13.5px; font-weight: 700; margin: 0; letter-spacing: -0.01em; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
+  font-size: 13.5px; font-weight: 700; margin: 0; letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.side-brand p { margin: 2px 0 0; font-size: 10.5px; color: var(--text-4); }
-.lang { display: flex; gap: 3px; margin-left: auto; }
+.side-brand-sub { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.side-brand-sub p { flex: 1; margin: 0; font-size: 10.5px; color: var(--text-4); }
+.lang { display: flex; gap: 3px; }
 .lang button {
   font: 500 10.5px/1 var(--font-sans); letter-spacing: 0.04em;
   background: transparent; border: 1px solid var(--line); color: var(--text-3);
