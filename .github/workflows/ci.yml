@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest ruff
+      - name: Lint
+        run: ruff check nbastars tests scripts notebooks app.py fetch_finals.py
+      - name: Tests
+        run: pytest -q
+      - name: Rebuild site data
+        run: python scripts/build_site.py
+      - name: Fail if the site data is stale
+        run: git diff --exit-code docs/assets/data.js

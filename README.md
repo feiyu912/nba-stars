@@ -1,6 +1,14 @@
 # NBA Historical Player Ranking System
 
-101 NBA players across 8 decades. Five independent, era-adjusted rankings. Let data speak.
+[![CI](https://github.com/feiyu912/nba-stars/actions/workflows/ci.yml/badge.svg)](https://github.com/feiyu912/nba-stars/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
+[![Data verified](https://img.shields.io/badge/data%20verified-100%25%20vs%20NBA.com-2fd39a)](scripts/verify_against_nba_api.py)
+[![Live dashboard](https://img.shields.io/badge/live%20dashboard-feiyu912.github.io%2Fnba--stars-35bdf0)](https://feiyu912.github.io/nba-stars/)
+[![Ruff](https://img.shields.io/badge/lint-ruff-261230?logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
+
+101 NBA players across 8 decades. Five independent, era-adjusted rankings, **every row verified against the primary source**. Let data speak.
+
+**[→ Browse the dashboard](https://feiyu912.github.io/nba-stars/)** — a static, bilingual (EN/中文) site generated from the same result files. A Streamlit app with the same views runs locally (`make app`).
 
 ## Quick Start
 
@@ -255,6 +263,12 @@ nbastars/                    # 计算核心 (唯一实现处)
 ├── i18n.py                  # 界面文案的中英文对照 (两种语言键必须一一对应)
 ├── dashboard_data.py        # 仪表盘的数据装配 (单独抽出以便测试)
 └── run.py                   # 按正确顺序跑完并写出 results/
+
+docs/                        # 静态站 (GitHub Pages 直接托管这个目录)
+├── index.html
+└── assets/{style.css,app.js,data.js,fonts/}
+
+.github/workflows/ci.yml     # lint + 测试 + 校验站点数据是否为最新
 
 scripts/
 ├── verify_reference_data.py # 常规赛校验 (对照 Basketball-Reference)
