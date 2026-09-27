@@ -86,12 +86,24 @@ def test_defense_does_not_impute_missing_stats():
     assert post["def_output"].iloc[0] == pytest.approx(1.5 + 0.8)
 
 
-def test_playmaking_marks_playoff_tov_imputed():
-    """季后赛数据没有失误列, 整表都应被标记为估算"""
-    df = _season_row().drop(columns=["TOV"])
-    out = dimensions.playmaking_views(df)
-    assert bool(out["TOV_imputed"].iloc[0]) is True
-    assert out["ast_tov"].notna().all()
+def test_playmaking_does_not_use_turnovers_in_the_index():
+    """助失比必须留在指数之外 —— 1977-78 前没有失误记录, 用它做乘数会让两个时代不可比。
+
+    这条曾经真实发生过: 用联盟平均失误数填空并当乘数, Oscar Robertson 靠这个
+    编造的数字排到组织榜 #6。
+    """
+    with_tov = dimensions.playmaking_views(_season_row(TOV=[3.0]))
+    without_tov = dimensions.playmaking_views(_season_row().drop(columns=["TOV"]))
+
+    # 指数只由 APG / 节奏 / 竞争强度 / 稀缺度决定: 失误不同, 指数必须完全相同
+    assert with_tov["playA"].iloc[0] == pytest.approx(without_tov["playA"].iloc[0])
+    assert with_tov["playC"].iloc[0] == pytest.approx(without_tov["playC"].iloc[0])
+
+    # 助失比仍然算, 但缺记录时是缺失 (不填充), 并打上"无记录"标记
+    assert with_tov["ast_tov"].iloc[0] == pytest.approx(5.0 / 3.0)
+    assert bool(with_tov["ast_tov_recorded"].iloc[0]) is True
+    assert pd.isna(without_tov["ast_tov"].iloc[0])
+    assert bool(without_tov["ast_tov_recorded"].iloc[0]) is False
 
 
 def test_rebounding_does_not_estimate_oreb_dreb_split():

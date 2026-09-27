@@ -91,7 +91,7 @@ per-minute view; each playoff game counts 3x a regular-season game.
 
 | Dimension | #1 | #2 | #3 | #4 | #5 |
 |-----------|----|----|----|----|----|
-| Playmaking | John Stockton | Magic Johnson | Chris Paul | Steve Nash | Jason Kidd |
+| Playmaking | John Stockton | Magic Johnson | Steve Nash | Chris Paul | Jason Kidd / Isiah Thomas / Westbrook |
 | Defense | Hakeem Olajuwon | David Robinson | Kareem Abdul-Jabbar | Anthony Davis | Patrick Ewing |
 | Rebounding | Dennis Rodman | Wilt Chamberlain | Dwight Howard | Bill Russell | Moses Malone |
 
@@ -215,17 +215,12 @@ standing notice about which fields did not exist in which era.
    blocks in 1973-74, turnovers in 1977-78, and the offensive/defensive rebound split in
    1973-74. Players whose careers ended before those dates simply have no data for those
    dimensions. They are excluded (not imputed) and the dashboard lists them explicitly.
-2. **AST/TOV for pre-1977 players is still an estimate, and it matters a lot.** Turnovers
-   were not recorded before 1977-78, so for 19 players the assist-to-turnover ratio is
-   estimated from a league-average turnover count (2.5) and the whole playmaking index is
-   multiplied by that estimate. The dashboard marks these players **Estimated**.
-   This is the last remaining estimated input, and it is not a small effect: replacing it with
-   a neutral multiplier moves **92 of 101 players**, up to 30 positions — Oscar Robertson
-   falls from #6 to #36, Bob Cousy from #14 to #38. In other words his top-10 playmaking rank
-   currently depends on an invented turnover number. Three consistent options are open:
-   neutral 1.0 multiplier (penalises pre-1977 vs modern), no multiplier for anyone (the only
-   era-consistent formula, but it drops AST/TOV from the index), or keep the estimate.
-   Not changed unilaterally because it rewrites a headline ranking.
+2. **AST/TOV is deliberately excluded from the playmaking index.** Turnovers were not recorded
+   before 1977-78. The index is therefore assists × scarcity only — the same formula for every
+   era — and AST/TOV is shown as a separate indicator for the players whose careers reach
+   1977-78. This replaced an earlier version that filled the gap with a league-average turnover
+   count (2.5) and used it as a multiplier: Oscar Robertson ranked #6 on that invented number,
+   and removing it puts him at #14. **No estimated input remains in any ranking.**
 4. **Median-of-ranks creates ties.** Combining two views by median rank discards magnitude
    information; players whose two view ranks sum to the same value tie. An alternative is to
    average Z-scored view scores — not adopted here to keep results comparable with earlier runs.

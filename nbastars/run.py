@@ -80,7 +80,7 @@ def run_impact(reg: pd.DataFrame, db: pd.DataFrame) -> pd.DataFrame:
 
 
 def run_playmaking(reg: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
-    print("[组织能力] APG x 助失比 x 稀缺性 (1977-78 前的 TOV 为估算值, 已打标记)")
+    print("[组织能力] 助攻 x 稀缺性 (助失比不进入指数, 仅作独立指标展示)")
     res = engine.build_dimension(
         dimensions.playmaking_views(reg), dimensions.playmaking_views(po),
         name="playmaking", key="play",
@@ -88,12 +88,12 @@ def run_playmaking(reg: pd.DataFrame, po: pd.DataFrame) -> pd.DataFrame:
         playoff_mode="weighted",
     )
     print(f"    {engine.rank_quality_report(res, 'play')}")
-    imp = res["reg_TOV_imputed"].fillna(0)
-    print(f"    助失比基于估算 TOV 的赛季占比: {imp.mean() * 100:.0f}% "
-          f"({int(imp.sum())}/{len(imp)} 行) — 这些球员的名次含估算成分")
-    res["TOV_imputed_share"] = imp
-    _write(res[["player", "play_rank", "play_tied", "reg_APG", "reg_TOV",
-                "reg_ast_tov", "po_APG", "po_GP", "TOV_imputed_share",
+    covered = res["reg_ast_tov_recorded"].fillna(0)
+    print(f"    有失误记录的赛季占比: {covered.mean() * 100:.0f}% — "
+          f"助失比只对这些球员有效 (1977-78 起才记录), 但不影响名次")
+    res["ast_tov_coverage"] = covered
+    _write(res[["player", "play_rank", "play_tied", "reg_APG", "po_APG", "po_GP",
+                "reg_ast_tov", "ast_tov_coverage",
                 "total_A_rank", "total_C_rank"]], "playmaking_ranking.csv")
     return res
 

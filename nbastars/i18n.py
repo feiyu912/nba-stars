@@ -87,14 +87,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "play_intro": (
             "**Who creates the most scoring opportunities for others?**\n\n"
             "Fully independent from Scoring — this measures what you create for teammates.\n\n"
-            "- **Playmaking Index** = assists per game (pace-adjusted) x assist-to-turnover ratio x "
-            "scarcity\n"
+            "- **Playmaking Index** = assists per game (pace-adjusted) x scarcity, combined with a "
+            "per-minute view\n"
             "- **Era-adjusted**: averaging 10 assists in 1962 (only Oscar did it) counts for more "
             "than 10 in 2025\n"
             "- **Playoff 3x weight**: creating under pressure matters more\n"
-            "- **AST/TOV**: creating without wasting possessions — Stockton (3.7) vs Westbrook (2.0)\n\n"
-            "*Turnovers were not recorded before 1977-78, so AST/TOV for those players is estimated "
-            "from a league-average turnover count and marked **Estimated** — never silently filled.*"
+            "- **AST/TOV** is reported separately, for the players whose careers include 1977-78 "
+            "onward — turnovers were not recorded before that, so it is deliberately kept **out of "
+            "the index**: a multiplier built on a missing stat would make the two eras incomparable\n\n"
+            "*Stockton (3.7) vs Westbrook (2.0) — both recorded eras, so that comparison is fair.*"
         ),
 
         # ══ 得分结构 ══
@@ -364,12 +365,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "play_intro": (
             "**谁为队友创造的机会最多？**\n\n"
             "与得分完全独立 —— 这里衡量的是你为队友创造了什么。\n\n"
-            "- **组织指数** = 场均助攻（节奏修正）× 助攻失误比 × 稀缺度\n"
+            "- **组织指数** = 场均助攻（节奏修正）× 稀缺度，再与每分钟视角合并\n"
             "- **时代修正**：1962 年场均 10 次助攻（只有 Oscar Robertson 做到）比 2025 年的 10 次更难得\n"
             "- **季后赛 3 倍加权**：压力下的组织更值钱\n"
-            "- **助攻失误比**：创造而不浪费 —— Stockton（3.7）对 Westbrook（2.0）\n\n"
-            "*1977-78 赛季之前不记录失误，这些球员的助攻失误比是按联盟平均误差数估算的，表中标为**估算** —— "
-            "不做静默填充。*"
+            "- **助攻失误比**单独展示，仅对生涯覆盖 1977-78 之后的球员有效 —— 那时才开始记录失误。"
+            "它**刻意不进入指数**：用一个缺失的统计量做乘数会让两个时代不可比\n\n"
+            "*Stockton（3.7）对 Westbrook（2.0）—— 两人都有失误记录，这个比较是公平的。*"
         ),
 
         "bd_header": "🔍 得分结构",

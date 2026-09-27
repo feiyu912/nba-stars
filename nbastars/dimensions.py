@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from . import config
@@ -42,31 +43,29 @@ SCORING_VIEWS = {"A": "scoreA", "C": "scoreC"}
 
 
 # ── 组织能力 ──
-def playmaking_views(df: pd.DataFrame, tov_imputed: float | None = 2.5) -> pd.DataFrame:
-    """A = 助攻 × 助失比 × 稀缺性; C = 每分钟助攻版本
+def playmaking_views(df: pd.DataFrame) -> pd.DataFrame:
+    """A = 助攻(节奏修正) × 稀缺性; C = 每分钟助攻 × 竞争强度 × 稀缺性
 
-    TOV 在 1977-78 之前没有记录。tov_imputed 给定值时用联盟平均填补 (历史遗留做法),
-    同时输出 TOV_imputed 标记, 让使用方知道这些赛季的助失比是估算的。
+    助失比**不进入指数**。原因: 失误在 1977-78 之前没有记录, 一旦把它做成乘数,
+    两个时代就不再可比 —— 填一个联盟平均失误数会让早期球员凭空拿到高倍率
+    (实测: 填 2.5 时 Oscar Robertson 靠这个假乘数排在 #6; 去掉后他掉到 #36)。
+
+    助失比仍然计算并输出, 但只作为**独立指标**展示, 且仅对 1977-78 起有记录的球员有效。
     """
     df = _base(df.copy(), None)
     if "TOV" not in df.columns:
-        # 季后赛数据源没有失误列, 只能整列估算 —— 这些赛季的助失比全是估算值
         df["TOV"] = float("nan")
-    df["TOV_imputed"] = df["TOV"].isna()
-    if tov_imputed is not None:
-        df["TOV"] = df["TOV"].fillna(tov_imputed)
-    df["TOV"] = df["TOV"].replace(0, 0.5)
-    df["ast_tov"] = df["APG"] / df["TOV"]
+    df["ast_tov_recorded"] = df["TOV"].notna()
+    df["ast_tov"] = df["APG"] / df["TOV"].replace(0, np.nan)
     df = add_scarcity(df, "APG")
     df["APG_adj"] = df["APG"] * df["pace_adj"]
-    df["playA"] = df["APG_adj"] * df["ast_tov"] * df["scarcity"]
-    df["playC"] = (per_minute(df, "APG") * df["ast_tov"]
-                   * df["competition"] * df["scarcity"])
+    df["playA"] = df["APG_adj"] * df["scarcity"]
+    df["playC"] = per_minute(df, "APG") * df["competition"] * df["scarcity"]
     return df
 
 
-PLAYMAKING_AGG = {"APG": "mean", "TOV": "mean", "ast_tov": "mean",
-                  "GP": "sum", "MIN": "mean", "TOV_imputed": "mean"}
+PLAYMAKING_AGG = {"APG": "mean", "ast_tov": "mean", "GP": "sum", "MIN": "mean",
+                  "ast_tov_recorded": "mean"}
 PLAYMAKING_VIEWS = {"A": "playA", "C": "playC"}
 
 

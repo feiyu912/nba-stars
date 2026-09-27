@@ -18,8 +18,8 @@ const RANKED_N = Object.fromEntries(DIMS.map((d) => [d, D.players.filter((p) => 
 // ══════════════ 文案 ══════════════
 const I18N = {
   en: {
-    brand: 'NBA Player Analysis', brandSub: 'era-adjusted · 101 players',
-    g_rank: 'Rankings', g_explore: 'Explore', g_about: 'About',
+    brand: 'NBA Player Analysis', brandSub: '101 players · era-adjusted',
+    g_rank: 'Rankings', g_explore: 'Explore', g_about: 'About', lang_label: 'Language',
     n_overview: 'Overview', n_scoring: 'Scoring', n_playmaking: 'Playmaking',
     n_defense: 'Defense', n_rebounding: 'Rebounding', n_impact: 'Impact',
     n_compare: 'Playoff & cross-dim', n_players: 'Player profile', n_data: 'Data & method',
@@ -29,7 +29,7 @@ const I18N = {
     integrity: 'Steals/blocks and the offensive/defensive rebound split start in 1973-74, turnovers in 1977-78. Missing values are shown as — and the affected players are excluded from that ranking rather than estimated.',
     l_scoring: 'Points per game (free throws discounted 0.7x, pace-adjusted) × efficiency relative to the era × scarcity, combined with a per-minute view. Every playoff game counts 3x.',
     l_impact: 'Ridge regression on O-DPM (third-party proxy target) using era-adjusted Z-scores. O-DPM is a proxy, not ground truth.',
-    l_playmaking: 'Assists per game (pace-adjusted) × assist-to-turnover ratio × scarcity, independent of scoring.',
+    l_playmaking: 'Assists per game (pace-adjusted) × scarcity, combined with a per-minute view — independent of scoring. AST/TOV is reported separately and kept out of the index on purpose.',
     l_defense: 'Steals + blocks, pace-adjusted, with era scarcity and playoff-experience bonuses.',
     l_rebounding: 'Total rebounds per game, pace-adjusted, with an era scarcity bonus.',
     l_compare: 'Who raises his game when it matters, and how the dimensions line up.',
@@ -43,14 +43,14 @@ const I18N = {
     c_gp: 'GP', c_seasons: 'Seasons', c_span: 'Career', c_pct: 'Pctl', c_ft: 'FT%',
     c_stl: 'STL', c_blk: 'BLK', c_def: 'STL+BLK', c_sample: 'Seasons', c_peak_orb: 'Peak ORB',
     c_peak_drb: 'Peak DRB', c_reg: 'Regular', c_po: 'Playoffs', c_change: 'Δ', c_po_gp: 'PO GP',
-    c_pred: 'Model', c_actual: 'D-DPM', c_curve: 'Curve', c_orb: 'ORB', c_drb: 'DRB',
+    c_pred: 'Model', c_actual: 'D-DPM', c_curve: 'Curve', c_ast_tov: 'AST/TOV', c_orb: 'ORB', c_drb: 'DRB',
     t_note_stlblk: 'Steals measure perimeter anticipation, blocks measure rim protection. Combined into one number a guard\'s steals and a centre\'s blocks cancel out, so they are ranked separately.',
-    t_note_play: 'Turnovers were not recorded before 1977-78. For players whose careers began earlier the AST/TOV ratio is estimated from a league-average turnover count and tagged — never silently filled.',
+    t_note_play: 'Turnovers were not recorded before 1977-78, so AST/TOV is only shown for players whose careers reach that season. It is deliberately NOT a multiplier in the index: filling the gap with a league-average value gave Oscar Robertson a #6 rank built on an invented number; keeping the formula era-consistent puts him at #14.',
     t_note_dimpact: 'Model quality: 53 training players, 5-fold cross-validated R² = 0.359, Spearman = 0.667. Players without steals/blocks data are not predicted.',
     t_excl_nodata: '{n} players are not ranked — their careers ended before 1973-74, so no steals or blocks exist.',
     t_excl_thin: '{n} more have fewer than 5 seasons of defensive data, too few for a 5-year peak window.',
     t_reb_split: '{n} players have no offensive/defensive rebound split (careers before 1973-74); their total-rebound rank is unaffected.',
-    tag_est: 'EST', tag_nodef: 'N/A',
+    tag_nodef: 'N/A',
     search: 'Search player…', ver: 'Verification', ver_i: 'Every row was re-fetched from the NBA.com API and compared field by field.',
     ver_reg: 'Regular season', ver_po: 'Playoffs', ver_pre: 'Playoff rows before 2003',
     ver_rows: 'Rows', ver_match: 'Match', ver_src: 'Primary source', ver_br: 'vs Basketball-Reference',
@@ -59,7 +59,7 @@ const I18N = {
     repo: 'Source & full documentation', sort_hint: 'Click a column header to sort',
     lim_items: [
       'Early-era players are not comparable to modern ones. Steals/blocks and the rebound split start in 1973-74, turnovers in 1977-78; affected players are excluded rather than estimated.',
-      'AST/TOV for the 19 players whose careers began before 1977-78 is estimated. Replacing that estimate with a neutral multiplier moves 92 of 101 players — Oscar Robertson falls from #6 to #36. This is the last estimated input in the project.',
+      'Turnovers were not recorded before 1977-78, so AST/TOV is reported separately and only for the eras that have it. It is deliberately not part of any index — the previous version filled the gap with a league-average value and used it as a multiplier, which put Oscar Robertson at #6 on an invented number. No estimated input remains in the rankings.',
       'O-DPM and D-DPM come from a third party and are themselves estimates; the ridge R² measures how well box scores reproduce that metric, not true impact.',
       'Scarcity and era Z-scores compare a player to this 101-player pool, not the whole league — the pool skews toward all-time greats.',
       'Multi-team seasons count the combined row only, so per-team splits are not available.',
@@ -67,8 +67,8 @@ const I18N = {
     ],
   },
   zh: {
-    brand: 'NBA 球员分析', brandSub: '时代修正 · 101 名球员',
-    g_rank: '排名', g_explore: '探索', g_about: '关于',
+    brand: 'NBA 球员分析', brandSub: '101 名球员 · 时代修正',
+    g_rank: '排名', g_explore: '探索', g_about: '关于', lang_label: '语言',
     n_overview: '总览', n_scoring: '得分', n_playmaking: '组织',
     n_defense: '防守', n_rebounding: '篮板', n_impact: '影响力',
     n_compare: '季后赛与跨维度', n_players: '球员画像', n_data: '数据与方法',
@@ -78,7 +78,7 @@ const I18N = {
     integrity: '抢断/盖帽与进攻/防守篮板拆分始于 1973-74 赛季，失误始于 1977-78 赛季。缺失值显示为 —，相关球员从该维度排除，不做估算填充。',
     l_scoring: '场均得分（罚球按 0.7 折算、节奏修正）× 相对效率 × 稀缺度，再与每分钟视角合并。每场季后赛按 3 场常规赛计算。',
     l_impact: '用岭回归拟合 O-DPM（第三方代理指标），特征为时代修正后的 Z 分数。O-DPM 是代理指标，不是真值。',
-    l_playmaking: '场均助攻（节奏修正）× 助攻失误比 × 稀缺度，与得分完全独立。',
+    l_playmaking: '场均助攻（节奏修正）× 稀缺度，再与每分钟视角合并 —— 与得分完全独立。助失比单独展示，刻意不进入指数。',
     l_defense: '抢断 + 盖帽，节奏修正，叠加时代稀缺度与季后赛经验加成。',
     l_rebounding: '场均总篮板，节奏修正，叠加时代稀缺度加成。',
     l_compare: '谁在关键时刻更强，以及各维度之间的横向关系。',
@@ -92,14 +92,14 @@ const I18N = {
     c_ts: '真实命中率', c_gp: '出场', c_seasons: '赛季数', c_span: '生涯', c_pct: '百分位', c_ft: '罚球占比',
     c_stl: '抢断', c_blk: '盖帽', c_def: '抢断+盖帽', c_sample: '有效赛季', c_peak_orb: '巅峰进攻篮板',
     c_peak_drb: '巅峰防守篮板', c_reg: '常规赛', c_po: '季后赛', c_change: '变化', c_po_gp: '季后赛出场',
-    c_pred: '模型预测', c_actual: '实际 D-DPM', c_curve: '生涯曲线', c_orb: '进攻篮板', c_drb: '防守篮板',
+    c_pred: '模型预测', c_actual: '实际 D-DPM', c_curve: '生涯曲线', c_ast_tov: '助失比', c_orb: '进攻篮板', c_drb: '防守篮板',
     t_note_stlblk: '抢断体现外线预判，盖帽体现护框。合成一项会让后卫的抢断和中锋的盖帽互相抵消，所以分开排名。',
-    t_note_play: '1977-78 赛季之前不记录失误。生涯开始于那时的球员，助失比是用联盟平均失误数估算的，已打标记 —— 不做静默填充。',
+    t_note_play: '1977-78 赛季之前不记录失误，所以助失比只对生涯覆盖到那个赛季的球员展示。它刻意不作为指数里的乘数：用联盟平均值填空曾让 Oscar Robertson 靠一个编造的数字排到 #6；改成两个时代同公式后他是 #14。',
     t_note_dimpact: '模型质量：训练样本 53 人，5 折交叉验证 R² = 0.359，Spearman = 0.667。没有抢断/盖帽数据的球员不参与预测。',
     t_excl_nodata: '{n} 人不参与排名 —— 他们的生涯在 1973-74 之前结束，没有任何抢断/盖帽记录。',
     t_excl_thin: '另有 {n} 人有效赛季不足 5 个，样本撑不起 5 年巅峰窗口。',
     t_reb_split: '{n} 人没有进攻/防守篮板拆分（生涯在 1973-74 之前）；他们的总篮板名次不受影响。',
-    tag_est: '估算', tag_nodef: '无数据',
+    tag_nodef: '无数据',
     search: '搜索球员…', ver: '数据校验', ver_i: '每一行都从 NBA.com 接口重新取回并逐字段比对。',
     ver_reg: '常规赛', ver_po: '季后赛', ver_pre: '2003 年前的季后赛行',
     ver_rows: '行数', ver_match: '一致率', ver_src: '一手数据源', ver_br: '对照 Basketball-Reference',
@@ -108,7 +108,7 @@ const I18N = {
     repo: '源码与完整文档', sort_hint: '点击表头排序',
     lim_items: [
       '早期球员与现代不可直接比较。抢断/盖帽与篮板拆分始于 1973-74，失误始于 1977-78；受影响的球员一律排除，不做估算。',
-      '生涯开始于 1977-78 之前的 19 人，助失比是估算值。把估算换成中性乘数会让 101 人里的 92 人名次变动 —— Oscar Robertson 会从 #6 掉到 #36。这是项目里最后一处估算输入。',
+      '失误从 1977-78 才开始记录，所以助失比只对有记录的年代展示，且刻意不进入任何指数。上一版用联盟平均值填空并把它当乘数，让 Oscar Robertson 靠一个编造的数字排到 #6。现在排名里已经没有任何估算输入。',
       'O-DPM 与 D-DPM 来自第三方，本身也是估计值；岭回归的 R² 衡量的是「基础数据能多大程度复现该指标」，不代表真实影响力。',
       '稀缺度与时代 Z 分数的比较基准是这 101 人池，不是全联盟 —— 池子偏向历史级球星。',
       '多队赛季只计合并数据，因此拿不到「交易前在 A 队打得如何」这类拆分。',
@@ -180,10 +180,8 @@ function pctCell(value, dim, digits = 1) {
     h('span', { class: 'v' }, p === null ? '—' : String(p)));
 }
 function tags(p, dim) {
-  const out = [];
-  if (dim === 'defense' && p.def_excluded) out.push(h('span', { class: 'tag' }, t('tag_nodef')));
-  if (dim === 'playmaking' && p.tov_estimated) out.push(h('span', { class: 'tag w' }, t('tag_est')));
-  return out;
+  return dim === 'defense' && p.def_excluded
+    ? [h('span', { class: 'tag' }, t('tag_nodef'))] : [];
 }
 
 /** 迷你生涯曲线: 排行榜里一眼看出是"巅峰型"还是"长青型" */
@@ -491,7 +489,7 @@ const VIEWS = {
   playmaking() {
     return [
       head(t('n_playmaking'), t('l_playmaking')),
-      sec(t('s_leaders'), board(rankedBy('playmaking', 25), { dim: 'playmaking', valueKey: 'apg', altKey: 'ppg' })),
+      sec(t('s_leaders'), board(rankedBy('playmaking', 25), { dim: 'playmaking', valueKey: 'apg', altKey: 'ast_tov', altDigits: 2 })),
       sec(t('s_dist'), chartCard(t('c_apg'), dotStrip(rankedBy('playmaking', 60), { dim: 'playmaking', valueKey: 'apg', color: HUE.playmaking }))),
       h('p', { class: 'note warn' }, t('t_note_play')),
     ];
@@ -643,20 +641,23 @@ function render() {
   const main = document.getElementById('view');
   main.replaceChildren(...VIEWS[cur]());
   document.getElementById('side').replaceChildren(
-    h('div', { class: 'side-brand' },
-      h('div', { class: 'side-brand-row' }, h('span', {}, '🏀'), h('h1', {}, t('brand'))),
-      h('div', { class: 'side-brand-sub' },
-        h('p', {}, t('brandSub')),
-        h('div', { class: 'lang' }, ...['en', 'zh'].map((l) => h('button', {
-          'aria-pressed': l === lang ? 'true' : 'false',
-          onclick: () => { lang = l; localStorage.setItem('nba_lang', l); render(); },
-        }, l === 'en' ? 'EN' : '中文'))))),
-    ...NAVG.map((grp) => h('div', { class: 'side-group' },
-      h('span', {}, t(grp.g)),
-      ...grp.items.map((k) => h('a', {
-        href: `#${k}`, 'aria-current': k === cur ? 'page' : null,
-        style: `--dot:${HUE[k] || 'var(--accent)'}`,
-      }, h('span', { class: 'sw' }), t('n_' + k))))));
+    h('div', { class: 'side-top' },
+      h('div', { class: 'side-brand' },
+        h('div', { class: 'side-brand-row' }, h('span', { class: 'logo' }, '🏀'),
+          h('h1', {}, t('brand'))),
+        h('p', { class: 'side-sub' }, t('brandSub'))),
+      ...NAVG.map((grp) => h('div', { class: 'side-group' },
+        h('span', {}, t(grp.g)),
+        ...grp.items.map((k) => h('a', {
+          href: `#${k}`, 'aria-current': k === cur ? 'page' : null,
+          style: `--dot:${HUE[k] || 'var(--accent)'}`,
+        }, h('span', { class: 'sw' }), t('n_' + k)))))),
+    h('div', { class: 'side-foot' },
+      h('span', { class: 'side-foot-label' }, t('lang_label')),
+      h('div', { class: 'seg' }, ...['en', 'zh'].map((l) => h('button', {
+        'aria-pressed': l === lang ? 'true' : 'false',
+        onclick: () => { lang = l; localStorage.setItem('nba_lang', l); render(); },
+      }, l === 'en' ? 'English' : '中文')))));
   document.title = `${t('brand')} · NBA`;
   window.scrollTo(0, 0);
 }

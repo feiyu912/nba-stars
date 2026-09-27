@@ -118,7 +118,7 @@ def build_payload() -> dict:
         rebounding[["player", "oreb_rank", "dreb_rank", "peak_OREB", "peak_DREB",
                     "rebound_split_missing"]], on="player", how="left")
     players = players.merge(
-        playmaking[["player", "TOV_imputed_share"]], on="player", how="left")
+        playmaking[["player", "reg_ast_tov", "ast_tov_coverage"]], on="player", how="left")
 
     teams = primary_franchise(reg)
     records = []
@@ -137,7 +137,8 @@ def build_payload() -> dict:
         rec["def_seasons"] = int(r.seasons_with_def_data) if pd.notna(r.seasons_with_def_data) else 0
         rec["def_excluded"] = bool(r.defense_stats_missing) or bool(r.sample_too_small)
         rec["reb_split_missing"] = bool(r.rebound_split_missing)
-        rec["tov_estimated"] = bool((r.TOV_imputed_share or 0) > 0.5)
+        rec["ast_tov"] = _clean(r.reg_ast_tov)          # 独立指标, 不进组织指数
+        rec["ast_tov_coverage"] = _clean(r.ast_tov_coverage)
         rec["po_ppg"] = _clean(r.po_ppg)
         rec["po_rpg"] = _clean(r.po_rpg)
         rec["po_apg"] = _clean(r.po_apg)
